@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1A1A1A">
+<title>Structural Viewer</title>
+<style>
+:root{
+  /* Palette Le Carnet de l'Ingénieur */
+  --moutarde:#C9A227;
+  --creme:#FAF7F2;
+  --noir:#1A1A1A;
+  --noir-rule:#3A3A38;
+  --on-noir:#F0EDE7;
+  --on-noir-dim:#93908A;
+  --renfort:#D64518;          /* rouge-orangé vif — couleur métier */
+  --mesure:#2F7FA8;
+
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --tap:54px;
+
+  /* Surfaces d'interface — mode Chantier (opaque) par défaut */
+  --panneau:#1A1A1A;
+  --panneau-bord:transparent;
+  --panneau-ombre:none;
+  --flou:none;
+}
+
+/* ── Interface Bureau : liquid glass ─────────────────────────────────
+   Verre translucide, flou, liseré lumineux en haut, ombre douce, léger
+   dégradé vertical. Activée par body.ui-verre (auto sur grand écran). */
+body.ui-verre{
+  --panneau:linear-gradient(180deg, rgba(34,34,36,.66), rgba(22,22,24,.58));
+  --panneau-bord:rgba(255,255,255,.09);
+  --panneau-ombre:0 12px 36px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.09);
+  --flou:blur(22px) saturate(1.35);
+}
+body.ui-verre .verre{
+  background:var(--panneau);
+  border:1px solid var(--panneau-bord);
+  box-shadow:var(--panneau-ombre);
+  backdrop-filter:var(--flou);
+  -webkit-backdrop-filter:var(--flou);
+}
+body.ui-verre .btn-primary,
+body.ui-verre .chip.on,
+body.ui-verre .tick.on{
+  box-shadow:0 2px 10px rgba(201,162,39,.34), inset 0 1px 0 rgba(255,255,255,.25);
+}
+body.ui-verre #toolbar button.on{ text-shadow:0 0 12px rgba(201,162,39,.5); }
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
+body{font-family:var(--sans);color:var(--noir);background:var(--creme);touch-action:none}
+canvas{display:block;position:fixed;inset:0}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+/* Typographie du tiroir : tout en blanc, noir uniquement quand sélectionné.
+   La barre latérale d'icônes garde son gris et sa teinte moutarde active. */
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--on-noir)}
+
+/* ── plaque ── */
+#plaque{position:fixed;top:max(12px,env(safe-area-inset-top));left:12px;z-index:20;
+  background:var(--panneau);color:var(--on-noir);border-left:3px solid var(--moutarde);
+  padding:9px 13px 10px}
+#plaque[hidden]{display:none}
+#plaque .cotes{font-family:var(--mono);font-size:13px;font-weight:600;
+  font-variant-numeric:tabular-nums}
+#plaque .stats{font-family:var(--mono);font-size:10.5px;color:var(--on-noir-dim);margin-top:3px}
+#plaque .stats b{color:var(--moutarde);font-weight:600}
+#plaque .stats i{color:var(--renfort);font-style:normal;font-weight:600}
+
+/* ── légende ── */
+#legende{position:fixed;top:max(12px,env(safe-area-inset-top));right:12px;z-index:20;
+  background:var(--panneau);color:var(--on-noir);padding:9px 12px;
+  max-height:44vh;overflow-y:auto}
+#legende[hidden]{display:none}
+#legende div{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;
+  line-height:1.85;white-space:nowrap}
+#legende i{width:15px;height:9px;flex:none;display:block}
+
+/* ── signature ── */
+#signature{position:fixed;left:14px;z-index:19;
+  bottom:calc(var(--tap) + 12px + env(safe-area-inset-bottom));
+  pointer-events:none;line-height:1.5}
+#signature .titre{font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--noir);opacity:.62;font-weight:600}
+#signature .credit{font-family:var(--mono);font-size:9.5px;color:var(--noir);opacity:.42}
+#signature .struct{font-family:var(--mono);font-size:11px;color:var(--noir);opacity:.8;
+  margin-top:3px;font-weight:600}
+/* Cartouche de révision : date, modèle source, indice. Sans marquage,
+   deux versions du même fichier circulent sans qu'on sache laquelle fait foi. */
+#signature .revision{font-family:var(--mono);font-size:9px;color:var(--noir);
+  opacity:.5;font-variant-numeric:tabular-nums}
+#signature .revision b{font-weight:600;opacity:.9}
+body.sombre #signature .titre,
+body.sombre #signature .credit,
+body.sombre #signature .revision,
+body.sombre #signature .struct{color:var(--creme)}
+
+/* ── écran d'accueil ── */
+#empty{position:fixed;inset:0;z-index:15;display:grid;place-content:center;justify-items:center;
+  padding:32px;text-align:center;pointer-events:none}
+#empty[hidden]{display:none}
+#empty .cadre{border:1.5px dashed rgba(26,26,26,.22);padding:42px 34px;
+  background:rgba(250,247,242,.75);pointer-events:auto;max-width:430px;
+  backdrop-filter:blur(4px)}
+#empty h1{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.16em;
+  text-transform:uppercase;margin:0 0 4px}
+#empty .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;
+  color:rgba(26,26,26,.5);margin:0}
+#empty .auteur{font-family:var(--mono);font-size:10px;font-weight:600;
+  letter-spacing:.03em;color:rgba(26,26,26,.78);margin:5px 0 22px}
+#empty p{font-size:13.5px;line-height:1.55;color:rgba(26,26,26,.68);margin:0 0 22px}
+#empty .hint{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:rgba(26,26,26,.45);margin:16px 0 0}
+/* Liste des chantiers publiés, lue dans modeles/modeles.json */
+#choix{display:flex;flex-direction:column;gap:7px;margin:0 0 20px}
+#choix[hidden]{display:none}
+#choix .modele{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  min-height:var(--tap);padding:0 15px;border:1px solid rgba(26,26,26,.22);
+  background:rgba(255,255,255,.55);text-align:left;
+  transition:border-color .15s,background .15s}
+#choix .modele:hover{border-color:var(--moutarde);background:rgba(255,255,255,.9)}
+#choix .modele .nom{font-size:13.5px;color:var(--noir)}
+#choix .modele .rev{font-family:var(--mono);font-size:9.5px;
+  color:rgba(26,26,26,.5);white-space:nowrap;font-variant-numeric:tabular-nums}
+/* Mode terrain : ouverture manuelle et glisser-déposer retirés. */
+body.verrouille #pick,
+body.verrouille #empty .hint{display:none}
+.btn-primary{background:var(--noir);color:var(--creme);font-family:var(--mono);font-size:12px;
+  letter-spacing:.09em;text-transform:uppercase;padding:0 24px;height:var(--tap);
+  transition:background .16s,color .16s}
+.btn-primary:hover{background:var(--moutarde);color:var(--noir)}
+
+/* ── fiche objet ── */
+#fiche{position:fixed;z-index:24;left:12px;
+  bottom:calc(var(--tap) + 12px + env(safe-area-inset-bottom));
+  width:min(330px,calc(100vw - 24px));background:var(--panneau);color:var(--on-noir);
+  border-left:3px solid var(--moutarde);padding:13px 15px 15px;
+  transform:translateY(10px);opacity:0;pointer-events:none;
+  transition:opacity .18s,transform .18s}
+#fiche.on{opacity:1;transform:none;pointer-events:auto}
+#fiche.renfort{border-left-color:var(--renfort)}
+#fiche .tete{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  margin-bottom:3px}
+#fiche .num{font-family:var(--mono);font-size:17px;font-weight:600}
+#fiche .prof{font-family:var(--mono);font-size:12px;color:var(--moutarde);text-align:right}
+#fiche .forme{font-family:var(--mono);font-size:10px;color:rgba(240,237,231,.62);margin-bottom:9px}
+#fiche dl{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;margin:0;
+  font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+#fiche dt{color:rgba(240,237,231,.62)}
+#fiche dd{margin:0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#fiche .act{display:flex;gap:8px;margin-top:12px}
+#fiche .act button{flex:1;height:38px;border:1px solid var(--noir-rule);
+  font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--on-noir);transition:border-color .14s,color .14s}
+#fiche .act button:hover{border-color:var(--moutarde);color:var(--moutarde)}
+#fiche .act button.on{background:var(--renfort);border-color:var(--renfort);color:#fff}
+
+/* ── barre d'outils ── */
+#toolbar{position:fixed;z-index:30;left:0;right:0;bottom:0;display:flex;
+  background:var(--panneau);border-top:1px solid var(--noir-rule);
+  padding-bottom:env(safe-area-inset-bottom)}
+body.ui-verre #toolbar{border-top-color:var(--panneau-bord)}
+#toolbar button{flex:1;min-height:var(--tap);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;color:var(--on-noir-dim);padding:8px 1px;
+  border-top:2px solid transparent;transition:color .14s,border-color .14s}
+#toolbar button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round}
+#toolbar button span{font-family:var(--mono);font-size:8.5px;letter-spacing:.02em;
+  text-transform:uppercase}
+#toolbar button.on{color:var(--moutarde);border-top-color:var(--moutarde)}
+#toolbar button:disabled{opacity:.3;cursor:default}
+
+/* ── tiroir ── */
+#sheet{position:fixed;z-index:25;left:0;right:0;bottom:0;background:var(--panneau);
+  color:var(--on-noir);border-top:1px solid var(--noir-rule);transform:translateY(101%);
+  transition:transform .26s cubic-bezier(.32,.72,0,1);max-height:62vh;display:flex;
+  flex-direction:column;padding-bottom:calc(var(--tap) + env(safe-area-inset-bottom))}
+#sheet.open{transform:translateY(0)}
+body.ui-verre #sheet{border-top-color:var(--panneau-bord)}
+#sheet header{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px 10px;border-bottom:1px solid var(--noir-rule);flex:none}
+#sheet .body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 0 14px}
+#sheetClose{color:var(--on-noir);font-family:var(--mono);font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;padding:6px 4px;opacity:.75}
+.row{display:flex;align-items:center;gap:11px;padding:0 16px;min-height:46px;
+  border-bottom:1px solid rgba(58,58,56,.5)}
+.row:last-child{border-bottom:none}
+.row .lbl{flex:1;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .val{font-family:var(--mono);font-size:11.5px;color:rgba(240,237,231,.72);
+  font-variant-numeric:tabular-nums}
+.row.head{min-height:32px;background:rgba(0,0,0,.28)}
+.row.head .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:rgba(240,237,231,.6)}
+.puce{width:13px;height:13px;flex:none;border:1px solid rgba(255,255,255,.16)}
+.tick{width:26px;height:26px;flex:none;border:1.5px solid var(--noir-rule);display:grid;
+  place-items:center;color:transparent}
+.tick.on{background:var(--moutarde);border-color:var(--moutarde);color:var(--noir)}
+.tick svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.6;
+  stroke-linecap:round;stroke-linejoin:round}
+.solo{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--on-noir);border:1px solid var(--noir-rule);padding:5px 8px;flex:none}
+.solo.on{color:var(--moutarde);border-color:var(--moutarde)}
+.chips{display:flex;gap:7px;padding:10px 16px;flex-wrap:wrap}
+.chip{flex:1 1 0;min-width:70px;height:42px;border:1px solid var(--noir-rule);
+  color:var(--on-noir);font-family:var(--mono);font-size:11px;letter-spacing:.03em;
+  transition:background .15s,color .15s,border-color .15s}
+.chip.on{background:var(--moutarde);border-color:var(--moutarde);color:var(--noir);font-weight:600}
+.ghost{display:block;width:calc(100% - 32px);margin:11px 16px 4px;height:44px;
+  border:1px solid var(--noir-rule);color:var(--on-noir);font-family:var(--mono);
+  font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  transition:border-color .15s,color .15s,background .15s}
+.ghost:hover{border-color:var(--moutarde);color:var(--moutarde)}
+.ghost.on{background:var(--moutarde);border-color:var(--moutarde);color:var(--noir);font-weight:600}
+.note{padding:11px 16px 3px;font-size:12px;line-height:1.5;color:rgba(240,237,231,.66)}
+#copie{width:calc(100% - 32px);margin:8px 16px;height:66px;background:#0D0D0D;
+  color:var(--on-noir);border:1px solid var(--noir-rule);font-family:var(--mono);
+  font-size:11px;padding:8px;resize:none}
+
+/* ── règle de coupe ── */
+#ruler{position:fixed;z-index:28;left:0;right:0;
+  bottom:calc(var(--tap) + env(safe-area-inset-bottom));background:var(--panneau);
+  border-top:1px solid var(--noir-rule);padding:12px 16px 14px;transform:translateY(130%);
+  transition:transform .26s cubic-bezier(.32,.72,0,1)}
+#ruler.open{transform:translateY(0)}
+#ruler .top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px}
+#cutValue{font-size:25px;font-weight:600;color:var(--moutarde);font-family:var(--mono);
+  font-variant-numeric:tabular-nums}
+#cutValue small{font-size:13px;color:rgba(240,237,231,.66);font-weight:400;margin-left:2px}
+.axisPick{display:flex;gap:6px}
+.axisPick button{width:36px;height:31px;border:1px solid var(--noir-rule);
+  color:var(--on-noir);font-family:var(--mono);font-size:12px}
+.axisPick button.on{background:var(--moutarde);border-color:var(--moutarde);
+  color:var(--noir);font-weight:600}
+#ticks{display:flex;justify-content:space-between;margin:2px 0 -4px;height:7px}
+#ticks i{width:1px;background:var(--noir-rule)}
+#ticks i:nth-child(5n+1){height:7px;background:var(--on-noir-dim)}
+#ticks i:not(:nth-child(5n+1)){height:4px;align-self:flex-start}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:34px;
+  background:none;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--noir-rule)}
+input[type=range]::-moz-range-track{height:2px;background:var(--noir-rule)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:30px;
+  background:var(--moutarde);border:none;margin-top:-14px;border-radius:1px}
+input[type=range]::-moz-range-thumb{width:14px;height:30px;background:var(--moutarde);
+  border:none;border-radius:1px}
+
+/* ── étiquettes et messages ── */
+#labels{position:fixed;inset:0;z-index:18;pointer-events:none}
+.alabel{position:absolute;transform:translate(-50%,-50%);font-family:var(--mono);
+  font-size:10px;letter-spacing:.05em;color:var(--noir);background:rgba(250,247,242,.92);
+  border:1px solid rgba(26,26,26,.3);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.alabel.niveau{border-radius:2px;font-variant-numeric:tabular-nums}
+body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
+  border-color:rgba(240,237,231,.34)}
+.mlabel{position:absolute;transform:translate(-50%,-50%);background:var(--mesure);color:#fff;
+  font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums;padding:3px 7px;
+  white-space:nowrap;box-shadow:0 1px 6px rgba(0,0,0,.32)}
+#hint{position:fixed;left:50%;transform:translateX(-50%);z-index:22;
+  bottom:calc(var(--tap) + 16px + env(safe-area-inset-bottom));
+  background:rgba(26,26,26,.95);color:var(--on-noir);font-family:var(--mono);font-size:11px;
+  padding:9px 14px;opacity:0;transition:opacity .18s;pointer-events:none;text-align:center;
+  max-width:86vw}
+#hint.show{opacity:1}
+
+/* ── ordinateur : rail latéral ── */
+@media (min-width:820px){
+  :root{--tap:58px}
+  #toolbar{top:0;bottom:auto;left:auto;right:0;width:90px;height:100vh;flex-direction:column;
+    border-top:none;border-left:1px solid var(--noir-rule);justify-content:center;gap:1px;
+    padding-bottom:0}
+  body.ui-verre #toolbar{border-left-color:var(--panneau-bord)}
+  #toolbar button{flex:none;height:62px;border-top:none;border-right:2px solid transparent}
+  #toolbar button.on{border-right-color:var(--moutarde)}
+  #toolbar button span{font-size:9px}
+  #sheet{top:0;bottom:0;right:90px;left:auto;width:348px;max-height:none;border-top:none;
+    border-left:1px solid var(--noir-rule);transform:translateX(calc(100% + 90px));
+    padding-bottom:0}
+  body.ui-verre #sheet{border-left-color:var(--panneau-bord)}
+  #sheet.open{transform:translateX(0)}
+  #ruler{bottom:0;right:90px;left:0;padding:14px 28px 18px}
+  #fiche{bottom:88px;left:14px}
+  #signature{bottom:16px}
+  #legende{right:104px}
+  #hint{bottom:22px;left:calc(50% - 45px)}
+}
+@media (max-width:819px){ #fiche.on ~ #signature{opacity:0} }
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important}}
+</style>
+</head>
+<body>
+
+<div id="labels"></div>
+
+<div id="empty">
+  <div class="cadre">
+    <h1>Structural Viewer</h1>
+    <p class="sub">Le Carnet de l'Ingénieur</p>
+    <p class="auteur">by Kévin FOMO, Ingénieur structures (CHEBAP)</p>
+    <p>Déposez un fichier <strong>.glb</strong> dans la fenêtre, ou choisissez-le
+       ci-dessous. Le viewer fonctionne ensuite sans réseau.</p>
+    <div id="choix" hidden></div>
+    <button class="btn-primary" id="pick">Ouvrir un modèle</button>
+    <p class="hint">glb · gltf + bin + textures</p>
+  </div>
+</div>
+
+<div id="plaque" class="verre" hidden>
+  <div class="cotes" id="pCotes">—</div>
+  <div class="stats" id="pStats">—</div>
+</div>
+
+<div id="legende" class="verre" hidden></div>
+
+<div id="fiche" class="verre">
+  <div class="tete"><span class="num" id="fNum">—</span><span class="prof" id="fProf">—</span></div>
+  <div class="forme" id="fForme">—</div>
+  <dl>
+    <dt>Calque</dt><dd id="fCalque">—</dd>
+    <dt>Matériau</dt><dd id="fMat">—</dd>
+    <dt>Longueur</dt><dd id="fLong">—</dd>
+    <dt>Section h × b</dt><dd id="fSect">—</dd>
+    <dt>Altimétrie</dt><dd id="fAlti">—</dd>
+    <dt>Excentrement</dt><dd id="fExc">—</dd>
+  </dl>
+  <div class="act">
+    <button id="fRenfort">Marquer renfort</button>
+    <button id="fIsoler">Isoler calque</button>
+  </div>
+</div>
+
+<div id="signature">
+  <div class="titre">KF Structural Viewer</div>
+  <div class="credit" id="sCredit"></div>
+  <div class="struct" id="sStruct"></div>
+  <div class="revision" id="sRev"></div>
+</div>
+
+<div id="hint"></div>
+
+<div id="ruler" class="verre">
+  <div class="top">
+    <div id="cutValue">0.000<small> m</small></div>
+    <div class="axisPick">
+      <button data-axis="0">X</button>
+      <button data-axis="1" class="on">Z</button>
+      <button data-axis="2">Y</button>
+      <button id="cutFlip" title="Inverser le côté conservé">⇄</button>
+    </div>
+  </div>
+  <div id="ticks"></div>
+  <input type="range" id="cutRange" min="0" max="1000" value="1000"
+         aria-label="Position du plan de coupe">
+</div>
+
+<div id="sheet" class="verre">
+  <header><span class="eyebrow" id="sheetTitle">Calques</span>
+          <button id="sheetClose">Fermer</button></header>
+  <div class="body" id="sheetBody"></div>
+</div>
+
+<nav id="toolbar" class="verre">
+  <button id="tOpen"><svg viewBox="0 0 24 24"><path d="M4 19V6a1 1 0 0 1 1-1h4l2 2h8a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/></svg><span>Ouvrir</span></button>
+  <button id="tLayers" disabled><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg><span>Calques</span></button>
+  <button id="tFantome" disabled><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17" fill="currentColor" stroke="none" opacity=".55"/></svg><span>Fantôme</span></button>
+  <button id="tRenfort" disabled><svg viewBox="0 0 24 24"><path d="M4 20 20 4"/><path d="M4 9v11h11"/><path d="M13 4h7v7"/></svg><span>Renfort</span></button>
+  <button id="tCut" disabled><svg viewBox="0 0 24 24"><path d="M4 8h16M4 16h16"/><path d="m9 4 6 16"/></svg><span>Coupe</span></button>
+  <button id="tMeasure" disabled><svg viewBox="0 0 24 24"><path d="M3 15 15 3l6 6L9 21Z"/><path d="M7 11l2 2M10 8l2 2M13 5l2 2"/></svg><span>Mesure</span></button>
+  <button id="tViews" disabled><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="1"/><path d="M3 14l5-4 4 3 3-3 6 5"/></svg><span>Vues</span></button>
+</nav>
+
+<input type="file" id="file" accept=".glb,.gltf,.bin,image/*" multiple hidden>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+const $id = i => document.getElementById(i);
+
+/* ══ CONFIGURATION DU DÉPLOIEMENT ══════════════════════════════════════
+   Tout ce qui se règle sans lire le code est regroupé ici.            */
+
+/* Index des modèles publiés, relatif à cette page. Pour ajouter un
+   chantier : déposez le .glb dans modeles/ et ajoutez une ligne dans
+   modeles.json. Aucune modification de code. */
+const CATALOGUE = 'modeles/modeles.json';
+
+/* Mode terrain : les renforts sont figés, les calques restent libres.
+   Mettre à false produit la variante bureau, déverrouillée d'emblée. */
+const VERROU = true;
+
+/* Empreinte du mot de passe de déverrouillage.
+   ATTENTION — ce n'est PAS une sécurité. Le dépôt GitHub Pages est
+   public : n'importe qui peut lire ce fichier, et les outils de
+   développement du navigateur permettent de contourner n'importe quel
+   verrou côté client. C'est un LOQUET : il empêche le doigt qui glisse
+   sur un écran tactile, pas quelqu'un de déterminé.
+   Pour changer le mot de passe : ouvrez la console du navigateur et
+   tapez  kfEmpreinte('votre nouveau mot de passe')  puis recopiez la
+   valeur ici. Le mot de passe lui-même n'apparaît jamais dans le code.
+   Valeur livrée = « carnet2026 » : changez-la avant diffusion. */
+const VERROU_EMPREINTE = 0x98BDB984;
+
+/* Déverrouillage : appui long sur le titre en bas à gauche. */
+const VERROU_APPUI_MS = 1500;
+
+/* Version du viewer : incrémentez ici, la mention suit. */
+const VERSION = '1.8';
+$id('sCredit').textContent =
+  `© v${VERSION} 2026 by Kévin FOMO — Ingénieur structures (CHEBAP)`;
+
+/* Interface : verre sur grand écran (Bureau), opaque sur mobile (Chantier).
+   Basculable à la main dans Calques. */
+let uiVerre = matchMedia('(min-width:820px)').matches;
+function appliquerUI(){ document.body.classList.toggle('ui-verre', uiVerre); }
+appliquerUI();
+
+/* ══ Ambiances 3D ═══════════════════════════════════════════════════════ */
+const AMBIANCES = {
+  atelier: { nom:'Atelier', sombre:false,
+             fond:0xFAF7F2, existant:0x8A9099, neutre:0xB9BDC2,
+             renfort:0xD64518, arete:0x1E2023, sol:[0xB8BCB6,0xD6DAD2] },
+  nuit:    { nom:'Nuit', sombre:true,
+             fond:0x33363A, existant:0x8B939D, neutre:0x565C63,
+             renfort:0xF06A28, arete:0xE2E6EB, sol:[0x565C62,0x42474C] },
+  soleil:  { nom:'Plein soleil', sombre:false,
+             fond:0xFFFFFF, existant:0x565D66, neutre:0x9BA2A9,
+             renfort:0xD62B0A, arete:0x000000, sol:[0x9AA0A6,0xC9CDD1] }
+};
+/* Palette de différenciation : saturée, écartée en teinte. */
+const PALETTE = [0x2E6F9E,0xC8551F,0x4C8B3F,0x8E4585,0x1F8A8C,0xB08A00,
+                 0x5B5FA8,0xA33B4E,0x6E8B1F,0x3D7F7A,0x9C6B2F,0x486E9B];
+
+/* ══ scène ══ */
+const renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.05, 5000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.screenSpacePanning = true;
+
+/* Éclairage simple et prévisible : hémisphérique + deux directionnels.
+   Pas de carte d'environnement ni de tone mapping filmique — les couleurs
+   affichées sont EXACTEMENT celles demandées, condition de base pour que
+   la différenciation par couleur soit fiable. */
+const ambient = new THREE.AmbientLight(0xffffff, 0.42);   // plancher garanti
+const hemi = new THREE.HemisphereLight(0xffffff, 0x9a9a94, 0.75);
+const sun  = new THREE.DirectionalLight(0xffffff, 1.0);
+sun.position.set(1.4, 2.2, 1.1);
+const fill = new THREE.DirectionalLight(0xffffff, 0.35);
+fill.position.set(-1.2, 0.6, -1.4);
+scene.add(ambient, hemi, sun, fill);
+
+let grid = null;
+const overlay = new THREE.Group(); scene.add(overlay);
+const groupeAxes = new THREE.Group(); scene.add(groupeAxes);
+let etiqAxes = [];
+
+/* ══ état ══ */
+const S = {
+  root:null, meshes:[], groups:[], bbox:null, size:1, tris:0, unit:1,
+  ambiance:'atelier', teinte:'etat', fantome:false, aretes:'marquees',
+  axes:null, axesOn:true, cartouche:null,
+  catalogue:[], modeleId:null, deverrouille:!VERROU,
+  renforts:new Set(), sel:null, aretesPretes:false,
+  cut:{ on:false, axis:1, pos:1, flip:false, plane:new THREE.Plane() },
+  measure:{ on:false, pts:[], list:[] },
+  marquage:false, views:[]
+};
+
+const fmt = (v,d=3) => v.toFixed(d);
+const hex = h => '#' + (h>>>0).toString(16).padStart(6,'0');
+function teinteDe(txt){
+  let h = 0;
+  for(let i=0;i<String(txt).length;i++) h = (h*31 + txt.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
+
+/* ══ chargement ══ */
+const draco = new DRACOLoader().setDecoderPath(
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/');
+
+function loadFiles(fileList){
+  const files = [...fileList];
+  const principal = files.find(f => /\.(glb|gltf)$/i.test(f.name));
+  if(!principal){ toast('Format non reconnu. Le viewer lit .glb et .gltf.'); return; }
+  const urls = new Map(); files.forEach(f => urls.set(f.name, URL.createObjectURL(f)));
+  const manager = new THREE.LoadingManager();
+  manager.setURLModifier(u =>
+    urls.get(decodeURIComponent(u.split('/').pop().split('?')[0])) || u);
+
+  toast('Lecture du modèle…', 60000);
+  new GLTFLoader(manager).setDRACOLoader(draco).load(urls.get(principal.name),
+    g => { installer(g.scene, principal.name); urls.forEach(u => URL.revokeObjectURL(u)); },
+    undefined,
+    e => { console.error(e); toast('Lecture impossible. Vérifiez que le .glb est complet.'); });
+}
+
+/* ══ Catalogue de modèles ══════════════════════════════════════════════
+   Les modèles publiés sont décrits par modeles/modeles.json. Ajouter un
+   chantier = déposer un .glb et ajouter une ligne. Un lien direct par
+   chantier s'obtient avec  ?m=identifiant  */
+async function chargerCatalogue(){
+  try {
+    const r = await fetch(CATALOGUE, {cache:'no-cache'});
+    if(!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    S.catalogue = Array.isArray(j.modeles) ? j.modeles : [];
+  } catch(e){
+    S.catalogue = [];           /* pas de catalogue : ouverture manuelle */
+    return;
+  }
+  const voulu = new URLSearchParams(location.search).get('m');
+  const cible = S.catalogue.find(m => m.id === voulu)
+             || (S.catalogue.length === 1 ? S.catalogue[0] : null);
+  if(cible) chargerModele(cible);
+  else majAccueil();
+}
+
+function chargerModele(m){
+  if(!m || !m.fichier) return;
+  S.modeleId = m.id || null;
+  toast('Chargement de ' + (m.nom || m.fichier) + '…', 60000);
+  new GLTFLoader().setDRACOLoader(draco).load(m.fichier,
+    g => { installer(g.scene, m.nom || m.fichier);
+           if(m.id) history.replaceState(null, '', '?m=' + encodeURIComponent(m.id)); },
+    undefined,
+    e => { console.error(e);
+           toast('Modèle introuvable : ' + m.fichier); });
+}
+
+/* Écran d'accueil : liste des chantiers publiés. */
+function majAccueil(){
+  const hote = $id('choix');
+  if(!hote) return;
+  hote.innerHTML = '';
+  if(!S.catalogue.length){ hote.hidden = true; return; }
+  hote.hidden = false;
+  S.catalogue.forEach(m => {
+    const b = document.createElement('button');
+    b.className = 'modele';
+    b.innerHTML = `<span class="nom"></span><span class="rev"></span>`;
+    b.querySelector('.nom').textContent = m.nom || m.id || m.fichier;
+    b.querySelector('.rev').textContent =
+      [m.revision ? 'ind. ' + m.revision : '', m.date || ''].filter(Boolean).join(' · ');
+    b.onclick = () => chargerModele(m);
+    hote.appendChild(b);
+  });
+}
+
+function nomStructure(fichier){
+  return fichier.replace(/\.(glb|gltf)$/i,'').replace(/^structure[_-]/i,'').trim();
+}
+
+function installer(root, fichier){
+  if(S.root){ scene.remove(S.root); libererArbre(S.root); }
+  effacerMesures();
+  S.sel = null; S.renforts.clear(); S.aretesPretes = false; S.views = [];
+
+  S.root = root; scene.add(root);
+  S.meshes = []; S.tris = 0;
+  root.traverse(o => {
+    if(!o.isMesh) return;
+    const brut = Object.keys(o.userData).length ? o.userData
+               : (o.parent && o.parent.userData) || {};
+    o.userData = Object.assign({}, brut);
+    if(o.userData.numero == null){
+      const m = /B(\d+)/.exec(o.name || (o.parent && o.parent.name) || '');
+      if(m) o.userData.numero = +m[1];
+    }
+    if(o.userData.renfort) S.renforts.add(o.userData.numero);
+
+    /* Nœuds témoins déposés par robot2glb.py : aucune géométrie utile,
+       seulement des métadonnées dans leurs extras. */
+    if(o.userData.axes || o.name === '__axes__'){
+      S.axes = o.userData.axes || null;
+      o.visible = false;
+      return;
+    }
+    if(o.userData.cartouche || o.name === '__cartouche__'){
+      S.cartouche = o.userData.cartouche || null;
+      o.visible = false;
+      return;
+    }
+
+    /* ── CAUSE RACINE DU RENDU NOIR ────────────────────────────────────
+       Le GLB produit par robot2glb.py ne contient que l'attribut POSITION,
+       sans NORMAL. Sans normales, un matériau éclairé reçoit une lumière
+       nulle : la face est peinte de la bonne couleur puis multipliée par
+       zéro, donc RENDUE NOIRE. Seules les arêtes, qui ne dépendent pas de
+       l'éclairage, restaient visibles et colorées.
+       On reconstruit donc les normales à la volée. */
+    if(!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+
+    /* ── CŒUR DU CORRECTIF ─────────────────────────────────────────────
+       Le matériau d'origine du GLB est jeté et remplacé par un matériau
+       DÉDIÉ à cette barre, créé une seule fois. Toutes les repeintes
+       ultérieures MUTENT ce matériau (color.set, opacity) au lieu
+       d'échanger des objets partagés : chaque barre répond, toujours. */
+    if(o.material && o.material.dispose) o.material.dispose();
+    o.material = new THREE.MeshStandardMaterial({
+      color:0x8A9099, metalness:0.12, roughness:0.72,
+      flatShading:true });   // normale déduite par facette, angles vifs
+
+    S.meshes.push(o);
+    const g = o.geometry;
+    S.tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+  });
+
+  S.bbox = new THREE.Box3().setFromObject(root);
+  const t = S.bbox.getSize(new THREE.Vector3());
+  S.size = Math.max(t.x, t.y, t.z) || 1;
+
+  construireCalques();
+  construireSol();
+  construireAxes();
+  majCartouche();
+  if(S.aretes !== 'aucune') construireAretes();
+  appliquerCouleurs();
+  cadrerTout();
+  appliquerCoupe();
+
+  $id('empty').hidden = true;
+  $id('plaque').hidden = false;
+  $id('sStruct').textContent = nomStructure(fichier);
+  $id('pCotes').textContent = `${fmt(t.x,1)} × ${fmt(t.z,1)} m · H ${fmt(t.y,1)} m`;
+  const k = Math.round(S.tris/1000);
+  const nVar = S.meshes.filter(m => m.userData.variable).length;
+  $id('pStats').innerHTML =
+    `${S.meshes.length} obj · ${k>999?(k/1000).toFixed(1)+' M':k+' k'} tri` +
+    (nVar ? ` · <b>${nVar} var.</b>` : '') +
+    (S.renforts.size ? ` · <i>${S.renforts.size} renfort</i>` : '');
+  ['tLayers','tCut','tMeasure','tViews','tRenfort','tFantome']
+    .forEach(i => $id(i).disabled = false);
+  majOnglets();
+  toast(`${nomStructure(fichier)} — ${fmt(t.x,1)} × ${fmt(t.z,1)} m, `
+        + `hauteur ${fmt(t.y,1)} m`, 4500);
+}
+
+function libererArbre(o){
+  o.traverse(n => {
+    if(n.geometry) n.geometry.dispose();
+    if(n.material && n.material.dispose) n.material.dispose();
+  });
+}
+
+function construireCalques(){
+  const map = new Map();
+  S.meshes.forEach(m => {
+    let haut = m, p = m.parent;
+    while(p && p !== S.root){ haut = p; p = p.parent; }
+    const cle = (m.userData.calque || haut.name || 'Sans nom').trim() || 'Sans nom';
+    if(!map.has(cle)) map.set(cle, { nom:cle, objs:[], tris:0, on:true });
+    const g = map.get(cle); g.objs.push(m);
+    const gg = m.geometry;
+    g.tris += (gg.index ? gg.index.count : gg.attributes.position.count) / 3;
+  });
+  S.groups = [...map.values()].sort((a,b) => b.tris - a.tris);
+  S.groups.forEach((g,i) => { g.couleur = PALETTE[i % PALETTE.length];
+                              g.objs.forEach(o => o.userData._g = i); });
+}
+
+function construireSol(){
+  if(grid){ scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); }
+  const A = AMBIANCES[S.ambiance];
+  const span = Math.ceil(S.size * 1.4);
+  grid = new THREE.GridHelper(span, Math.min(60, Math.max(8, Math.round(span))),
+                              A.sol[0], A.sol[1]);
+  grid.material.transparent = true; grid.material.opacity = .6;
+  const c = S.bbox.getCenter(new THREE.Vector3());
+  grid.position.set(c.x, S.bbox.min.y - S.size*0.002, c.z);
+  scene.add(grid);
+}
+
+/* ── Arêtes ────────────────────────────────────────────────────────────
+   Un profilé en I est fabriqué à partir de 3 boîtes, soit 36 segments
+   d'arête. Vue d'ensemble, une semelle d'IPE 220 mesure 0,3 pixel : ces
+   36 segments tombent dans les mêmes 3 ou 4 pixels. Avec une couleur
+   globale sombre, l'alpha sature et la structure entière vire au noir,
+   masquant complètement les faces colorées.
+
+   Correctif : chaque jeu d'arêtes prend la couleur de SA barre, assombrie
+   (ou éclaircie en ambiance sombre). Même saturées, les arêtes conservent
+   donc la teinte de la barre — un IPE bleu reste bleu. */
+const NIVEAUX_ARETES = { aucune:0, fines:0.40, marquees:0.78 };
+
+function construireAretes(){
+  if(S.aretesPretes) return;
+  if(S.tris > 400000){ toast('Modèle trop lourd pour le calcul des arêtes.'); return; }
+  S.meshes.forEach(m => {
+    const mat = new THREE.LineBasicMaterial({ transparent:true, opacity:0.4 });
+    const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 22), mat);
+    l.userData._arete = true;
+    l.renderOrder = 1;
+    m.add(l);
+    m.userData._lignes = l;
+  });
+  S.aretesPretes = true;
+}
+
+/* Arête : gris neutre identique pour TOUTES les barres, renforts compris.
+   C'est le corps de la barre qui porte la couleur, pas son contour. */
+function couleurArete(A){ return A.sombre ? 0xB9BFC6 : 0x50565D; }
+
+/* ══ LA fonction de repeinte ═══════════════════════════════════════════
+   Une seule porte de sortie pour toutes les couleurs. Mutation directe. */
+const estRenfort = m => S.renforts.has(m.userData.numero);
+
+function couleurBarre(m, A){
+  if(estRenfort(m)) return A.renfort;
+  switch(S.teinte){
+    case 'calque': {
+      const g = S.groups[m.userData._g];
+      return g ? g.couleur : A.existant;
+    }
+    case 'groupe':
+      return m.userData.groupe ? teinteDe('g' + m.userData.groupe) : A.neutre;
+    case 'profil':
+      return (m.userData.profil && m.userData.profil !== '—')
+             ? teinteDe('p' + m.userData.profil) : A.neutre;
+    default:
+      return A.existant;
+  }
+}
+
+function appliquerCouleurs(){
+  const A = AMBIANCES[S.ambiance];
+  scene.background = new THREE.Color(A.fond);
+  document.body.classList.toggle('sombre', A.sombre);
+  hemi.intensity = A.sombre ? 1.25 : 1.0;
+  sun.intensity  = A.sombre ? 0.95 : 1.1;
+
+  const forceArete = NIVEAUX_ARETES[S.aretes] || 0;
+
+  S.meshes.forEach(m => {
+    const mat = m.material;
+    const r = estRenfort(m);
+    const estompe = S.fantome && !r && m !== S.sel;
+    const couleur = couleurBarre(m, A);
+
+    mat.color.set(couleur);
+    if(m === S.sel) mat.emissive.set(A.sombre ? 0x5A4A00 : 0x3E3200);
+    else if(r)      mat.emissive.set(A.sombre ? 0x401505 : 0x2A0E03);
+    else            mat.emissive.set(0x000000);
+
+    /* Fantôme : translucide à 12 %, sans écrire la profondeur pour que
+       les renforts opaques restent nets derrière plusieurs épaisseurs. */
+    const transparent = estompe;
+    if(mat.transparent !== transparent){
+      mat.transparent = transparent;
+      mat.needsUpdate = true;
+    }
+    mat.opacity = estompe ? 0.12 : 1.0;
+    mat.depthWrite = !estompe;
+
+    const l = m.userData._lignes;
+    if(l){
+      l.material.color.set(couleurArete(A));
+      l.material.opacity = estompe ? forceArete * 0.28 : forceArete;
+      l.visible = forceArete > 0;
+    }
+  });
+  majLegende();
+}
+
+function majLegende(){
+  const L = $id('legende');
+  if(!S.root){ L.hidden = true; return; }
+  const A = AMBIANCES[S.ambiance];
+  const ligne = (c,t) => `<div><i style="background:${hex(c)}"></i>${t}</div>`;
+  let html = ligne(A.renfort, `Renfort (${S.renforts.size})`);
+  if(S.teinte === 'etat'){
+    html += ligne(A.existant, 'Existant');
+  } else {
+    const vus = new Map();
+    S.meshes.forEach(m => {
+      if(estRenfort(m) || !m.visible) return;
+      let cle;
+      if(S.teinte === 'calque') cle = (S.groups[m.userData._g] || {}).nom;
+      else if(S.teinte === 'groupe') cle = m.userData.groupe || 'Hors groupe';
+      else cle = m.userData.profil || '—';
+      if(cle && !vus.has(cle)) vus.set(cle, couleurBarre(m, A));
+    });
+    [...vus].slice(0,12).forEach(([t,c]) => { html += ligne(c, t); });
+    if(vus.size > 12) html += `<div style="opacity:.6">… +${vus.size-12}</div>`;
+  }
+  L.hidden = false; L.innerHTML = html;
+}
+
+/* ══ cadrage ══ */
+function cadrerTout(boite){ poserCamera(boite || S.bbox,
+  new THREE.Vector3(0.72, 0.46, 1).normalize()); }
+function poserCamera(b, dir){
+  if(!b) return;
+  const c = b.getCenter(new THREE.Vector3());
+  const r = b.getSize(new THREE.Vector3()).length() * 0.5 || 1;
+  const d = r / Math.sin(THREE.MathUtils.degToRad(camera.fov*0.5)) * 1.08;
+  camera.position.copy(c).addScaledVector(dir, d);
+  controls.target.copy(c);
+  camera.near = Math.max(d/2000, 0.01); camera.far = d*40;
+  camera.updateProjectionMatrix(); controls.update();
+}
+const VUES = { 'Iso':[0.72,0.46,1], 'Face':[0,0.05,1],
+               'Pignon':[1,0.05,0], 'Dessus':[0,1,0.001] };
+
+/* ══ coupe ══ */
+const AX = [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)];
+function appliquerCoupe(){
+  if(!S.bbox) return;
+  if(!S.cut.on){ renderer.clippingPlanes = []; return; }
+  const k = ['x','y','z'][S.cut.axis];
+  const lo = S.bbox.min[k], hi = S.bbox.max[k];
+  const p = lo + (hi-lo)*S.cut.pos;
+  const n = AX[S.cut.axis].clone().multiplyScalar(S.cut.flip ? 1 : -1);
+  S.cut.plane.set(n, S.cut.flip ? -p : p);
+  renderer.clippingPlanes = [S.cut.plane];
+  const lab = S.cut.axis === 1 ? 'Z' : (S.cut.axis === 0 ? 'X' : 'Y');
+  $id('cutValue').innerHTML = `${lab} = ${fmt(p*S.unit)}<small> m</small>`;
+}
+const coteVisible = pt => !S.cut.on || S.cut.plane.distanceToPoint(pt) >= -1e-6;
+
+/* ══ sélection et mesure ══ */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function viser(x,y){
+  ndc.set((x/innerWidth)*2-1, -(y/innerHeight)*2+1);
+  ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects(S.meshes.filter(m => m.visible), false);
+  return hits.find(h => coteVisible(h.point)) || null;
+}
+function accrocher(hit, sx, sy){
+  const pos = hit.object.geometry.attributes.position;
+  const v = new THREE.Vector3(), p = new THREE.Vector3();
+  let best = null, bd = 26;
+  for(let i=0;i<pos.count;i++){
+    v.fromBufferAttribute(pos,i).applyMatrix4(hit.object.matrixWorld);
+    p.copy(v).project(camera);
+    const d = Math.hypot((p.x*0.5+0.5)*innerWidth - sx,
+                         (-p.y*0.5+0.5)*innerHeight - sy);
+    if(d < bd){ bd = d; best = v.clone(); }
+  }
+  return best || hit.point;
+}
+function ajouterPoint(p){
+  S.measure.pts.push(p.clone());
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(S.size*0.005,12,10),
+    new THREE.MeshBasicMaterial({ color:0x2F7FA8, depthTest:false }));
+  dot.position.copy(p); dot.renderOrder = 999; overlay.add(dot);
+  if(S.measure.pts.length === 2){
+    const [a,b] = S.measure.pts;
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a,b]),
+      new THREE.LineBasicMaterial({ color:0x2F7FA8, depthTest:false }));
+    l.renderOrder = 999; overlay.add(l);
+    const el = document.createElement('div'); el.className = 'mlabel';
+    $id('labels').appendChild(el);
+    S.measure.list.push({ el, d:a.distanceTo(b),
+      mid:a.clone().add(b).multiplyScalar(0.5) });
+    S.measure.pts = [];
+    if(ongletOuvert === 'measure') dessinerTiroir('measure');
+  }
+}
+function effacerMesures(){
+  [...overlay.children].forEach(c => { overlay.remove(c);
+    c.geometry && c.geometry.dispose(); c.material && c.material.dispose(); });
+  S.measure.list.forEach(m => m.el.remove());
+  S.measure.list = []; S.measure.pts = [];
+}
+/* ══ Loquet des renforts ═══════════════════════════════════════════════
+   FNV-1a 32 bits, en JavaScript pur : pas de crypto.subtle, qui n'est pas
+   exposé sur file:// dans tous les navigateurs. Un hachage cryptographique
+   n'apporterait rien ici de toute façon — voir l'avertissement en tête. */
+function kfEmpreinte(txt){
+  let h = 2166136261;
+  const s = 'KF-' + String(txt);
+  for(let i = 0; i < s.length; i++){
+    h ^= s.charCodeAt(i) & 0xFF;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+window.kfEmpreinte = kfEmpreinte;   /* pour régénérer une empreinte */
+
+function tenterDeverrouillage(){
+  if(S.deverrouille){
+    S.deverrouille = false;
+    majVerrou();
+    toast('Renforts reverrouillés.');
+    return;
+  }
+  const saisi = prompt('Mot de passe de modification :');
+  if(saisi == null) return;
+  if(kfEmpreinte(saisi) === VERROU_EMPREINTE){
+    S.deverrouille = true;
+    majVerrou();
+    toast('Modification déverrouillée pour cette session.', 2600);
+  } else {
+    toast('Mot de passe incorrect.');
+  }
+}
+
+/* Reflète l'état du loquet dans l'interface. */
+function majVerrou(){
+  document.body.classList.toggle('verrouille', !S.deverrouille);
+  const b = $id('fRenfort');
+  if(b){
+    b.disabled = !S.deverrouille;
+    b.title = S.deverrouille ? '' : 'Renforts verrouillés';
+  }
+  if(!S.deverrouille && S.marquage){ S.marquage = false; }
+  majOnglets();
+  if(ongletOuvert === 'renfort') dessinerTiroir('renfort');
+}
+
+/* ══ Cartouche de révision ═════════════════════════════════════════════
+   Date de génération, modèle source et indice, lus dans le GLB. Deux
+   versions du même fichier finissent toujours par circuler en parallèle
+   sur un chantier ; sans marquage, personne ne sait laquelle fait foi. */
+function majCartouche(){
+  const c = S.cartouche, el = $id('sRev');
+  if(!el) return;
+  if(!c){ el.textContent = ''; return; }
+  const bouts = [];
+  if(c.revision) bouts.push(`ind. <b>${c.revision}</b>`);
+  if(c.date)     bouts.push(c.date);
+  if(c.modele)   bouts.push(c.modele);
+  el.innerHTML = bouts.join(' · ');
+  el.title = c.script ? `généré par ${c.script}` : '';
+}
+
+/* ══ Files de construction ═════════════════════════════════════════════
+   Les files sont LUES dans Robot (Project.AxisMngr) par robot2glb.py, avec
+   leurs noms et leurs cotes exacts, puis déposées dans le GLB. Elles ne
+   sont plus déduites des alignements de nœuds : cette reconstruction
+   donnait 23 files pour 6 réelles et des niveaux inventés. Ici on les
+   trace au sol en tirets, avec une étiquette projetée à l'extrémité. */
+function construireAxes(){
+  while(groupeAxes.children.length){
+    const c = groupeAxes.children.pop();
+    c.geometry.dispose();
+  }
+  etiqAxes.forEach(l => l.el.remove());
+  etiqAxes = [];
+  if(!S.axes || !S.bbox) return;
+
+  const A = AMBIANCES[S.ambiance];
+  const mat = new THREE.LineDashedMaterial({
+    color: A.sombre ? 0x99A1AA : 0x7C848D, transparent:true, opacity:0.8,
+    dashSize: S.size * 0.014, gapSize: S.size * 0.009 });
+
+  const bb = S.bbox, marge = S.size * 0.05, y0 = bb.min.y;
+
+  const trait = (a, b) => {
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), mat);
+    l.computeLineDistances();
+    groupeAxes.add(l);
+  };
+  const etiquette = (p, txt, cls) => {
+    const el = document.createElement('div');
+    el.className = 'alabel' + (cls ? ' ' + cls : '');
+    el.textContent = txt;
+    $id('labels').appendChild(el);
+    etiqAxes.push({ el, p: p.clone() });
+  };
+
+  (S.axes.files || []).forEach(f => {
+    trait(new THREE.Vector3(f.c, y0, bb.min.z - marge),
+          new THREE.Vector3(f.c, y0, bb.max.z + marge));
+    etiquette(new THREE.Vector3(f.c, y0, bb.max.z + marge * 1.7), f.n);
+  });
+  (S.axes.travees || []).forEach(t => {
+    trait(new THREE.Vector3(bb.min.x - marge, y0, t.c),
+          new THREE.Vector3(bb.max.x + marge, y0, t.c));
+    etiquette(new THREE.Vector3(bb.min.x - marge * 1.7, y0, t.c), t.n);
+  });
+  (S.axes.niveaux || []).forEach(n => {
+    trait(new THREE.Vector3(bb.min.x - marge, n.c, bb.min.z - marge),
+          new THREE.Vector3(bb.max.x + marge, n.c, bb.min.z - marge));
+    etiquette(new THREE.Vector3(bb.min.x - marge * 1.7, n.c, bb.min.z - marge),
+              n.n, 'niveau');
+  });
+
+  groupeAxes.visible = S.axesOn;
+}
+
+function majEtiquettesAxes(){
+  if(!S.axesOn){
+    etiqAxes.forEach(l => { l.el.style.display = 'none'; });
+    return;
+  }
+  const v = new THREE.Vector3();
+  etiqAxes.forEach(l => {
+    v.copy(l.p).project(camera);
+    const dedans = v.z < 1 && Math.abs(v.x) < 1.4 && Math.abs(v.y) < 1.4;
+    l.el.style.display = dedans ? 'block' : 'none';
+    if(dedans){
+      l.el.style.left = ((v.x * 0.5 + 0.5) * innerWidth) + 'px';
+      l.el.style.top  = ((-v.y * 0.5 + 0.5) * innerHeight) + 'px';
+    }
+  });
+}
+
+function majEtiquettes(){
+  const v = new THREE.Vector3();
+  S.measure.list.forEach(m => {
+    v.copy(m.mid).project(camera);
+    const on = v.z < 1 && coteVisible(m.mid);
+    m.el.style.display = on ? 'block' : 'none';
+    if(on){
+      m.el.style.left = ((v.x*0.5+0.5)*innerWidth)+'px';
+      m.el.style.top  = ((-v.y*0.5+0.5)*innerHeight)+'px';
+      m.el.textContent = fmt(m.d*S.unit)+' m';
+    }
+  });
+}
+
+/* ══ fiche ══ */
+function selectionner(mesh){
+  S.sel = mesh || null;
+  appliquerCouleurs();
+  const f = $id('fiche');
+  if(!mesh){ f.classList.remove('on'); return; }
+  const d = mesh.userData;
+  const bb = new THREE.Box3().setFromObject(mesh).getSize(new THREE.Vector3());
+  const r = estRenfort(mesh);
+  $id('fNum').textContent = d.numero != null ? 'B'+d.numero : (mesh.name || 'Objet');
+  $id('fProf').textContent = d.profil || '—';
+  $id('fForme').textContent = d.forme || '';
+  $id('fCalque').textContent = d.calque || '—';
+  $id('fMat').textContent = d.materiau || '—';
+  $id('fLong').textContent = d.longueur != null ? fmt(d.longueur*S.unit)+' m'
+    : fmt(Math.max(bb.x,bb.y,bb.z)*S.unit)+' m';
+  const mm = v => (v*1000).toFixed(0);
+  $id('fSect').textContent = (d.h != null && d.b != null)
+    ? (d.variable ? `${mm(d.h)}→${mm(d.h_fin)} × ${mm(d.b)} mm`
+                  : `${mm(d.h)} × ${mm(d.b)} mm`) : '—';
+  $id('fAlti').textContent = (d.z_min != null)
+    ? `+${fmt(d.z_min,2)} → +${fmt(d.z_max,2)}` : '—';
+  /* Excentrement : Robot le stocke symboliquement (I_BOAP_*), robot2glb.py
+     en déduit la cote depuis VY/VPY/VZ/VPZ. On affiche le décalage réel,
+     pas seulement le nom de l'étiquette, qui ne dit pas de combien. */
+  const ey = d.exc_y || 0, ez = d.exc_z || 0;
+  const fe = $id('fExc');
+  if(Math.abs(ey) > 1e-6 || Math.abs(ez) > 1e-6){
+    const bouts = [];
+    if(Math.abs(ez) > 1e-6) bouts.push(`z ${(ez*1000>0?'+':'')}${(ez*1000).toFixed(0)}`);
+    if(Math.abs(ey) > 1e-6) bouts.push(`y ${(ey*1000>0?'+':'')}${(ey*1000).toFixed(0)}`);
+    fe.textContent = bouts.join('  ') + ' mm';
+    fe.title = d.excentrement || '';
+  } else {
+    fe.textContent = d.excentrement ? d.excentrement : '—';
+    fe.title = '';
+  }
+  $id('fRenfort').classList.toggle('on', r);
+  $id('fRenfort').textContent = r ? 'Renfort ✓' : 'Marquer renfort';
+  f.classList.toggle('renfort', r);
+  f.classList.add('on');
+}
+function basculerRenfort(mesh){
+  const n = mesh.userData.numero;
+  if(n == null){ toast('Objet sans numéro de barre.'); return; }
+  S.renforts.has(n) ? S.renforts.delete(n) : S.renforts.add(n);
+  appliquerCouleurs();
+  if(S.sel === mesh) selectionner(mesh);
+  if(ongletOuvert === 'renfort') dessinerTiroir('renfort');
+  majPlaque();
+  toast(S.renforts.has(n) ? `B${n} marquée renfort` : `B${n} retirée des renforts`, 1400);
+}
+function majPlaque(){
+  const s = $id('pStats');
+  s.innerHTML = s.innerHTML.replace(/ · <i>.*?<\/i>/, '')
+    + (S.renforts.size ? ` · <i>${S.renforts.size} renfort</i>` : '');
+}
+
+/* ══ pointeur ══ */
+let appui = null;
+renderer.domElement.addEventListener('pointerdown', e => {
+  appui = { x:e.clientX, y:e.clientY, t:Date.now() }; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if(!appui) return;
+  const bouge = Math.hypot(e.clientX-appui.x, e.clientY-appui.y);
+  const bref = Date.now()-appui.t < 600;
+  appui = null;
+  if(bouge > 8 || !bref || !S.root) return;
+  const hit = viser(e.clientX, e.clientY);
+  if(S.measure.on){
+    hit ? ajouterPoint(accrocher(hit, e.clientX, e.clientY))
+        : toast('Visez une surface du modèle.');
+  } else if(S.marquage){
+    if(hit) basculerRenfort(hit.object);
+  } else {
+    selectionner(hit ? hit.object : null);
+  }
+});
+
+/* ══ tiroir ══ */
+let ongletOuvert = null;
+const TITRES = { layers:'Calques et couleurs', measure:'Mesures',
+                 views:'Vues et image', renfort:'Renforts',
+                 modeles:'Chantiers' };
+function ouvrirTiroir(k){
+  if(ongletOuvert === k){ fermerTiroir(); return; }
+  ongletOuvert = k; $id('sheetTitle').textContent = TITRES[k];
+  dessinerTiroir(k); $id('sheet').classList.add('open'); majOnglets();
+}
+function fermerTiroir(){ ongletOuvert = null;
+  $id('sheet').classList.remove('open'); majOnglets(); }
+function majOnglets(){
+  $id('tLayers').classList.toggle('on', ongletOuvert === 'layers');
+  $id('tViews').classList.toggle('on', ongletOuvert === 'views');
+  $id('tMeasure').classList.toggle('on', S.measure.on);
+  $id('tCut').classList.toggle('on', S.cut.on);
+  $id('tRenfort').classList.toggle('on', S.marquage || ongletOuvert === 'renfort');
+  $id('tFantome').classList.toggle('on', S.fantome);
+}
+const el = (t,c,h) => { const n = document.createElement(t); if(c) n.className = c;
+  if(h != null) n.innerHTML = h; return n; };
+const CHECK = '<svg viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg>';
+
+function dessinerTiroir(key){
+  const b = $id('sheetBody'); b.innerHTML = '';
+
+  if(key === 'layers'){
+    b.appendChild(el('div','note','Ambiance'));
+    const amb = el('div','chips');
+    Object.entries(AMBIANCES).forEach(([k,A]) => {
+      const c = el('button','chip'+(S.ambiance===k?' on':''), A.nom);
+      c.onclick = () => { S.ambiance = k; construireSol(); construireAxes();
+                          appliquerCouleurs(); dessinerTiroir('layers'); };
+      amb.appendChild(c);
+    });
+    b.appendChild(amb);
+
+    b.appendChild(el('div','note','Interface'));
+    const ui = el('div','chips');
+    [['Bureau — verre',true],['Chantier — opaque',false]].forEach(([lab,v]) => {
+      const c = el('button','chip'+(uiVerre===v?' on':''), lab);
+      c.onclick = () => { uiVerre = v; appliquerUI(); dessinerTiroir('layers'); };
+      ui.appendChild(c);
+    });
+    b.appendChild(ui);
+
+    b.appendChild(el('div','note','Différencier les barres par'));
+    const te = el('div','chips');
+    [['État','etat'],['Calque','calque'],['Groupe','groupe'],['Profilé','profil']]
+      .forEach(([lab,k]) => {
+        const c = el('button','chip'+(S.teinte===k?' on':''), lab);
+        c.onclick = () => { S.teinte = k; appliquerCouleurs(); dessinerTiroir('layers'); };
+        te.appendChild(c);
+      });
+    b.appendChild(te);
+
+    const fg = el('button','ghost'+(S.fantome?' on':''),
+                  S.fantome ? 'Rétablir l\'existant' : 'Estomper l\'existant');
+    fg.onclick = () => { S.fantome = !S.fantome; appliquerCouleurs();
+                         dessinerTiroir('layers'); majOnglets(); };
+    b.appendChild(fg);
+
+    b.appendChild(el('div','note','Lignes de construction'));
+    const lc = el('div','chips');
+    [['Affichées',true],['Masquées',false]].forEach(([lab,v]) => {
+      const c = el('button','chip'+(S.axesOn===v?' on':''), lab);
+      c.onclick = () => { S.axesOn = v; groupeAxes.visible = v;
+                          dessinerTiroir('layers'); };
+      lc.appendChild(c);
+    });
+    b.appendChild(lc);
+    if(!S.axes)
+      b.appendChild(el('div','note',
+        'Aucune file dans ce modèle : régénérez le .glb avec la version '
+        + 'à jour de robot2glb.py.'));
+
+    b.appendChild(el('div','note','Définition des arêtes'));
+    const ar = el('div','chips');
+    [['Aucune','aucune'],['Fines','fines'],['Marquées','marquees']]
+      .forEach(([lab,k]) => {
+        const c = el('button','chip'+(S.aretes===k?' on':''), lab);
+        c.onclick = () => { S.aretes = k;
+          if(k !== 'aucune') construireAretes();
+          appliquerCouleurs(); dessinerTiroir('layers'); };
+        ar.appendChild(c);
+      });
+    b.appendChild(ar);
+
+    const h = el('div','row head');
+    h.append(el('span','lbl','Calque'), el('span','val','triangles'));
+    b.appendChild(h);
+    S.groups.forEach(g => {
+      const r = el('div','row');
+      const t = el('button','tick'+(g.on?' on':''), CHECK);
+      t.onclick = () => { g.on = !g.on; g.objs.forEach(o => o.visible = g.on);
+                          majLegende(); dessinerTiroir('layers'); };
+      const p = el('span','puce');
+      p.style.background = hex(S.teinte === 'calque' ? g.couleur
+                                : AMBIANCES[S.ambiance].existant);
+      const s = el('button','solo','Isoler');
+      s.onclick = () => {
+        const seul = S.groups.every(x => x===g ? x.on : !x.on);
+        S.groups.forEach(x => { x.on = seul ? true : (x===g);
+                                x.objs.forEach(o => o.visible = x.on); });
+        majLegende(); dessinerTiroir('layers');
+      };
+      r.append(t, p, el('span','lbl',g.nom),
+               el('span','val', Math.round(g.tris).toLocaleString('fr-FR')), s);
+      b.appendChild(r);
+    });
+
+    b.appendChild(el('div','note','Unité du modèle'));
+    const u = el('div','chips');
+    [['m',1],['cm',0.01],['mm',0.001]].forEach(([lab,f]) => {
+      const c = el('button','chip'+(S.unit===f?' on':''), lab);
+      c.onclick = () => { S.unit = f; appliquerCoupe(); dessinerTiroir('layers'); };
+      u.appendChild(c);
+    });
+    b.appendChild(u);
+  }
+
+  if(key === 'modeles'){
+    b.appendChild(el('div','note',
+      'Chantiers publiés. Le modèle affiché porte son indice de révision '
+      + 'en bas à gauche.'));
+    S.catalogue.forEach(m => {
+      const r = el('div','row');
+      const lbl = el('span','lbl', m.nom || m.id || m.fichier);
+      lbl.style.cursor = 'pointer';
+      const val = el('span','val',
+        [m.revision ? 'ind. ' + m.revision : '', m.date || ''].filter(Boolean).join(' · '));
+      lbl.onclick = () => { chargerModele(m); fermerTiroir(); };
+      r.append(lbl, val); b.appendChild(r);
+    });
+  }
+
+  if(key === 'renfort'){
+    /* Verrouillé : la liste reste CONSULTABLE. Savoir quelles barres sont
+       à renforcer est tout l'intérêt du livrable ; seule la modification
+       est retirée, pas l'information. */
+    if(!S.deverrouille){
+      b.appendChild(el('div','note',
+        'Barres à renforcer définies au bureau. Touchez une ligne pour '
+        + 'la localiser dans la structure.'));
+    } else {
+      b.appendChild(el('div','note', S.marquage
+        ? 'Désignation active : touchez les barres pour les marquer ou les retirer.'
+        : 'Activez la désignation, puis touchez les barres de renfort.'));
+      const t = el('button','ghost'+(S.marquage?' on':''),
+                   S.marquage ? 'Terminer la désignation' : 'Désigner des barres');
+      t.onclick = () => { S.marquage = !S.marquage;
+        if(S.marquage){ S.measure.on = false; selectionner(null); }
+        dessinerTiroir('renfort'); majOnglets(); };
+      b.appendChild(t);
+    }
+
+    const h = el('div','row head');
+    h.append(el('span','lbl', `${S.renforts.size} barre(s) marquée(s)`));
+    b.appendChild(h);
+
+    const liste = [...S.renforts].sort((a,b)=>a-b);
+    liste.slice(0,60).forEach(n => {
+      const m = S.meshes.find(x => x.userData.numero === n);
+      const r = el('div','row');
+      const go = el('span','lbl',
+        'B'+n + (m && m.userData.profil ? ' · '+m.userData.profil : ''));
+      go.style.cursor = 'pointer';
+      if(m) go.onclick = () => { selectionner(m);
+        cadrerTout(new THREE.Box3().setFromObject(m).expandByScalar(S.size*0.08)); };
+      if(S.deverrouille){
+        const d = el('button','solo','Retirer');
+        d.onclick = () => { S.renforts.delete(n); appliquerCouleurs();
+                            majPlaque(); dessinerTiroir('renfort'); };
+        r.append(go, d);
+      } else {
+        const v = el('span','solo','Localiser');
+        v.style.opacity = '.7';
+        r.append(go, v);
+      }
+      b.appendChild(r);
+    });
+    if(liste.length > 60)
+      b.appendChild(el('div','note',`… et ${liste.length-60} autres.`));
+
+    if(liste.length && S.deverrouille){
+      const ta = el('textarea'); ta.id = 'copie'; ta.readOnly = true;
+      ta.value = 'RENFORTS = [' + liste.join(', ') + ']';
+      b.appendChild(ta);
+      const c = el('button','ghost','Copier pour robot2glb.py');
+      c.onclick = () => { ta.select(); ta.setSelectionRange(0,99999);
+        try { document.execCommand('copy');
+              toast('Liste copiée — collez-la dans robot2glb.py'); }
+        catch(e){ toast('Sélectionnez le texte ci-dessus et copiez-le.'); } };
+      b.appendChild(c);
+      const z = el('button','ghost','Tout effacer');
+      z.onclick = () => { S.renforts.clear(); appliquerCouleurs();
+                          majPlaque(); dessinerTiroir('renfort'); };
+      b.appendChild(z);
+    }
+  }
+
+  if(key === 'measure'){
+    if(!S.measure.list.length)
+      b.appendChild(el('div','note',
+        'Touchez deux points. Le point s\'accroche au sommet du profilé '
+        + 'quand vous visez près d\'un about.'));
+    S.measure.list.forEach((m,i) => {
+      const r = el('div','row');
+      r.append(el('span','lbl','Cote '+(i+1)),
+               el('span','val', fmt(m.d*S.unit)+' m'));
+      b.appendChild(r);
+    });
+    if(S.measure.list.length){
+      const c = el('button','ghost','Effacer les cotes');
+      c.onclick = () => { effacerMesures(); dessinerTiroir('measure'); };
+      b.appendChild(c);
+    }
+  }
+
+  if(key === 'views'){
+    b.appendChild(el('div','note','Vues normalisées'));
+    const v = el('div','chips');
+    Object.entries(VUES).forEach(([nom,d]) => {
+      const c = el('button','chip', nom);
+      c.onclick = () => poserCamera(S.bbox, new THREE.Vector3(...d).normalize());
+      v.appendChild(c);
+    });
+    b.appendChild(v);
+    const a = el('button','ghost','Enregistrer la vue actuelle');
+    a.onclick = () => { S.views.push({ nom:'Vue '+(S.views.length+1),
+      p:camera.position.clone(), t:controls.target.clone() });
+      dessinerTiroir('views'); };
+    b.appendChild(a);
+    S.views.forEach((v,i) => {
+      const r = el('div','row');
+      const go = el('span','lbl', v.nom); go.style.cursor = 'pointer';
+      go.onclick = () => voler(v.p, v.t);
+      const d = el('button','solo','Suppr');
+      d.onclick = () => { S.views.splice(i,1); dessinerTiroir('views'); };
+      r.append(go,d); b.appendChild(r);
+    });
+    const f = el('button','ghost','Recadrer sur tout');
+    f.onclick = () => cadrerTout(); b.appendChild(f);
+    const s = el('button','ghost','Enregistrer une image');
+    s.onclick = capturer; b.appendChild(s);
+  }
+}
+
+function voler(p,t){
+  const p0 = camera.position.clone(), t0 = controls.target.clone(),
+        d = performance.now();
+  (function pas(){
+    const k = Math.min((performance.now()-d)/450,1);
+    const e = k<.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+    camera.position.lerpVectors(p0,p,e); controls.target.lerpVectors(t0,t,e);
+    controls.update();
+    if(k<1) requestAnimationFrame(pas);
+  })();
+}
+function capturer(){
+  renderer.render(scene,camera);
+  const a = document.createElement('a');
+  a.download = ($id('sStruct').textContent || 'vue')+'.png';
+  a.href = renderer.domElement.toDataURL('image/png'); a.click();
+}
+let minuteur;
+function toast(m, ms=2600){
+  const h = $id('hint'); h.textContent = m; h.classList.add('show');
+  clearTimeout(minuteur);
+  minuteur = setTimeout(() => h.classList.remove('show'), ms);
+}
+
+/* ══ commandes ══ */
+/* Bouton « Ouvrir » : en mode terrain il donne accès au catalogue des
+   chantiers publiés, jamais au système de fichiers. Déverrouillé, il
+   retrouve son rôle d'ouverture manuelle. */
+$id('pick').onclick = () => $id('file').click();
+$id('tOpen').onclick = () => {
+  if(S.deverrouille){ $id('file').click(); return; }
+  if(!S.catalogue.length){ toast('Aucun chantier publié.'); return; }
+  ouvrirTiroir('modeles');
+};
+majVerrou();
+chargerCatalogue();
+
+$id('file').onchange = e => { if(e.target.files.length) loadFiles(e.target.files);
+                              e.target.value = ''; };
+$id('sheetClose').onclick = fermerTiroir;
+$id('tLayers').onclick = () => ouvrirTiroir('layers');
+$id('tViews').onclick  = () => ouvrirTiroir('views');
+$id('tRenfort').onclick = () => ouvrirTiroir('renfort');
+
+/* Déverrouillage discret : appui long sur le titre en bas à gauche.
+   Aucun indice visuel — c'est voulu, mais ce n'est pas une sécurité. */
+(() => {
+  const cible = document.querySelector('#signature .titre');
+  if(!cible) return;
+  cible.style.pointerEvents = 'auto';
+  let t = null;
+  const debut = e => { e.preventDefault();
+    t = setTimeout(() => { t = null; tenterDeverrouillage(); }, VERROU_APPUI_MS); };
+  const fin = () => { if(t){ clearTimeout(t); t = null; } };
+  cible.addEventListener('pointerdown', debut);
+  ['pointerup','pointerleave','pointercancel'].forEach(
+    ev => cible.addEventListener(ev, fin));
+})();
+$id('tFantome').onclick = () => {
+  S.fantome = !S.fantome; appliquerCouleurs(); majOnglets();
+  if(ongletOuvert === 'layers') dessinerTiroir('layers');
+  toast(S.fantome ? 'Existant estompé — les renforts ressortent.'
+                  : 'Existant rétabli.');
+};
+$id('fRenfort').onclick = () => { if(S.sel) basculerRenfort(S.sel); };
+$id('fIsoler').onclick = () => {
+  if(!S.sel) return;
+  const g = S.groups[S.sel.userData._g]; if(!g) return;
+  const seul = S.groups.every(x => x===g ? x.on : !x.on);
+  S.groups.forEach(x => { x.on = seul ? true : (x===g);
+                          x.objs.forEach(o => o.visible = x.on); });
+  majLegende();
+  if(ongletOuvert === 'layers') dessinerTiroir('layers');
+};
+$id('tMeasure').onclick = () => {
+  S.measure.on = !S.measure.on;
+  if(S.measure.on){ S.marquage = false; selectionner(null); ouvrirTiroir('measure'); }
+  else if(ongletOuvert === 'measure') fermerTiroir();
+  majOnglets();
+};
+$id('tCut').onclick = () => { S.cut.on = !S.cut.on;
+  $id('ruler').classList.toggle('open', S.cut.on); appliquerCoupe(); majOnglets(); };
+$id('cutRange').oninput = e => { S.cut.pos = e.target.value/1000; appliquerCoupe(); };
+$id('cutFlip').onclick = () => { S.cut.flip = !S.cut.flip;
+  $id('cutFlip').classList.toggle('on', S.cut.flip); appliquerCoupe(); };
+document.querySelectorAll('.axisPick [data-axis]').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.axisPick [data-axis]')
+      .forEach(x => x.classList.remove('on'));
+    btn.classList.add('on');
+    S.cut.axis = +btn.dataset.axis; S.cut.pos = 1;
+    $id('cutRange').value = 1000; appliquerCoupe();
+  };
+});
+$id('ticks').innerHTML = '<i></i>'.repeat(41);
+
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault();
+  if(!S.deverrouille) return;      /* mode terrain : dépôt de fichier ignoré */
+  if(e.dataTransfer.files.length) loadFiles(e.dataTransfer.files); });
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+addEventListener('keydown', e => {
+  if(e.key === 'f') cadrerTout();
+  if(e.key === 'g') $id('tFantome').click();
+  if(e.key === 'a'){ S.axesOn = !S.axesOn; groupeAxes.visible = S.axesOn;
+                     if(ongletOuvert === 'layers') dessinerTiroir('layers'); }
+  if(e.key === 'Escape'){ fermerTiroir(); selectionner(null);
+                          S.marquage = false; majOnglets(); }
+});
+
+renderer.setAnimationLoop(() => {
+  controls.update(); majEtiquettes(); majEtiquettesAxes();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
