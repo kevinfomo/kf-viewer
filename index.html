@@ -29,6 +29,20 @@
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --tap:54px;
 
+  /* ── Occupation du bas de l'écran ────────────────────────────────────
+     --marge-dock est la bande NOIRE laissée sous les boutons, au droit de
+     l'indicateur d'accueil de l'iPhone. Le fond de la barre, lui, descend
+     toujours jusqu'au bord physique : l'écran est plein.
+     Pourquoi ne pas la mettre à 0 : sous l'indicateur, iOS capture le
+     glissement vers le haut. Un bouton posé là se rate ou renvoie à
+     l'écran d'accueil — avec des gants, systématiquement.
+     Mettre 0px pour coller franchement au bord malgré tout.
+     --dock est la hauteur totale occupée : TOUT ce qui s'ancre en bas
+     s'y réfère, pour qu'un réglage suffise à tout réaligner. */
+  --marge-dock:14px;
+  --safe-bas:env(safe-area-inset-bottom, 0px);
+  --dock:calc(var(--tap) + min(var(--safe-bas), var(--marge-dock)));
+
   /* Surfaces d'interface — mode Chantier (opaque) par défaut */
   --panneau:#1A1A1A;
   --panneau-bord:transparent;
@@ -86,12 +100,15 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   max-height:44vh;overflow-y:auto}
 #legende[hidden]{display:none}
 #legende{max-height:34vh;overflow:hidden}
-/* Application installée : plus de barre Safari, mais une encoche en haut et
-   la barre d'accueil en bas. Sans ces marges, la barre d'outils passe
-   dessous et devient intouchable. */
+/* Application installée : plus de barre Safari, mais une encoche en haut.
+   ── DÉFAUT CORRIGÉ ────────────────────────────────────────────────────
+   Ce bloc appelait var(--dock) alors qu'aucune règle ne la définissait.
+   Un calc() portant une variable inconnue est invalide au calcul : la
+   déclaration entière est jetée et « bottom » retombe sur « auto ». En
+   application installée — donc précisément sur l'iPhone en usage chantier
+   — la signature quittait le bas de l'écran. --dock est maintenant
+   définie dans :root ; ce bloc n'a plus qu'à régler l'encoche du haut. */
 @media (display-mode: standalone){
-  #toolbar{padding-bottom:max(6px,env(safe-area-inset-bottom))}
-  #signature{bottom:calc(var(--dock) + max(10px,env(safe-area-inset-bottom)))}
   #legende{top:max(16px,env(safe-area-inset-top))}
   #plaque{top:max(16px,env(safe-area-inset-top))}
 }
@@ -105,7 +122,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 
 /* ── signature ── */
 #signature{position:fixed;left:14px;z-index:19;
-  bottom:calc(var(--tap) + 12px + env(safe-area-inset-bottom));
+  bottom:calc(var(--dock) + 12px);
   pointer-events:none;line-height:1.5}
 #signature .titre{font-family:var(--mono);font-size:10px;letter-spacing:.18em;
   text-transform:uppercase;color:var(--noir);opacity:.62;font-weight:600}
@@ -166,7 +183,7 @@ body.verrouille #empty .hint{display:none}
 
 /* ── fiche objet ── */
 #fiche{position:fixed;z-index:24;left:12px;
-  bottom:calc(var(--tap) + 12px + env(safe-area-inset-bottom));
+  bottom:calc(var(--dock) + 12px);
   width:min(330px,calc(100vw - 24px));background:var(--panneau);color:var(--on-noir);
   border-left:3px solid var(--moutarde);padding:13px 15px 15px;
   transform:translateY(10px);opacity:0;pointer-events:none;
@@ -192,7 +209,7 @@ body.verrouille #empty .hint{display:none}
 /* ── barre d'outils ── */
 #toolbar{position:fixed;z-index:30;left:0;right:0;bottom:0;display:flex;
   background:var(--panneau);border-top:1px solid var(--noir-rule);
-  padding-bottom:env(safe-area-inset-bottom)}
+  padding-bottom:min(var(--safe-bas), var(--marge-dock))}
 body.ui-verre #toolbar{border-top-color:var(--panneau-bord)}
 #toolbar button{flex:1;min-height:var(--tap);display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:4px;color:var(--on-noir-dim);padding:8px 1px;
@@ -208,7 +225,7 @@ body.ui-verre #toolbar{border-top-color:var(--panneau-bord)}
 #sheet{position:fixed;z-index:25;left:0;right:0;bottom:0;background:var(--panneau);
   color:var(--on-noir);border-top:1px solid var(--noir-rule);transform:translateY(101%);
   transition:transform .26s cubic-bezier(.32,.72,0,1);max-height:62vh;display:flex;
-  flex-direction:column;padding-bottom:calc(var(--tap) + env(safe-area-inset-bottom))}
+  flex-direction:column;padding-bottom:var(--dock)}
 #sheet.open{transform:translateY(0)}
 body.ui-verre #sheet{border-top-color:var(--panneau-bord)}
 #sheet header{display:flex;align-items:center;justify-content:space-between;
@@ -254,7 +271,7 @@ body.ui-verre #sheet{border-top-color:var(--panneau-bord)}
 
 /* ── règle de coupe ── */
 #ruler{position:fixed;z-index:28;left:0;right:0;
-  bottom:calc(var(--tap) + env(safe-area-inset-bottom));background:var(--panneau);
+  bottom:var(--dock);background:var(--panneau);
   border-top:1px solid var(--noir-rule);padding:12px 16px 14px;transform:translateY(130%);
   transition:transform .26s cubic-bezier(.32,.72,0,1)}
 #ruler.open{transform:translateY(0)}
@@ -292,7 +309,7 @@ body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
   font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums;padding:3px 7px;
   white-space:nowrap;box-shadow:0 1px 6px rgba(0,0,0,.32)}
 #hint{position:fixed;left:50%;transform:translateX(-50%);z-index:22;
-  bottom:calc(var(--tap) + 16px + env(safe-area-inset-bottom));
+  bottom:calc(var(--dock) + 16px);
   background:rgba(26,26,26,.95);color:var(--on-noir);font-family:var(--mono);font-size:11px;
   padding:9px 14px;opacity:0;transition:opacity .18s;pointer-events:none;text-align:center;
   max-width:86vw}
@@ -300,8 +317,10 @@ body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
 
 /* ── ordinateur : rail latéral ── */
 @media (min-width:820px){
-  :root{--tap:58px}
-  #toolbar{top:0;bottom:auto;left:auto;right:0;width:90px;height:100vh;flex-direction:column;
+  /* La barre devient un rail vertical à droite : plus rien n'est ancré en
+     bas, --dock retombe donc à zéro et tous les calc() suivent seuls. */
+  :root{--tap:58px;--dock:0px}
+  #toolbar{top:0;bottom:auto;left:auto;right:0;width:90px;height:100dvh;flex-direction:column;
     border-top:none;border-left:1px solid var(--noir-rule);justify-content:center;gap:1px;
     padding-bottom:0}
   body.ui-verre #toolbar{border-left-color:var(--panneau-bord)}
@@ -334,6 +353,85 @@ body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
   #legende i{width:12px;height:8px}
   #legende .bascule{font-size:9.5px}
 }
+/* ── Téléphone en paysage ─────────────────────────────────────────────
+   414 px de haut : la barre garde ses sept boutons, mais les nouveaux
+   entrants les poussent hors du cadre et les rendaient inatteignables.
+   Elle défile désormais horizontalement, avec accrochage et un voile de
+   bord qui signale qu'il reste des outils à droite. La hauteur tactile
+   descend à 46 px : en paysage c'est le vertical qui manque, pas
+   l'horizontal. */
+@media (max-width:900px) and (orientation:landscape){
+  :root{--tap:46px}
+  #toolbar{overflow-x:auto;overflow-y:hidden;justify-content:flex-start;
+    scrollbar-width:none;-ms-overflow-style:none;
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);
+    mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent)}
+  #toolbar::-webkit-scrollbar{display:none}
+  #toolbar button{flex:0 0 auto;min-width:74px;scroll-snap-align:start;padding:5px 4px}
+  #toolbar button svg{width:17px;height:17px}
+  #toolbar button span{font-size:8px}
+  #sheet{max-height:74vh}
+  #plaque{max-width:36vw}
+  #legende{max-width:30vw;max-height:26vh}
+  #signature .credit,#signature .revision{display:none}
+}
+
+/* ── Rectangle de sélection ───────────────────────────────────────────
+   Deux modes, convention AutoCAD : glissé vers la droite = « fenêtre »
+   (barre entièrement contenue), vers la gauche = « capture » (barre
+   simplement touchée). La couleur et le tireté distinguent les deux. */
+#lasso{position:fixed;z-index:26;pointer-events:none;display:none;
+  border:1.5px dashed var(--moutarde);background:rgba(201,162,39,.10)}
+#lasso.capture{border-style:dashed;border-color:#2F7FA8;
+  background:rgba(47,127,168,.12)}
+#lasso[data-mode]::after{content:attr(data-mode);position:absolute;left:0;top:-19px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+  background:var(--noir);color:var(--on-noir);padding:2px 6px;white-space:nowrap}
+body.lasso-arme canvas{cursor:crosshair}
+
+/* ── Menu contextuel (clic droit) ─────────────────────────────────────── */
+#menu{position:fixed;z-index:40;min-width:212px;background:var(--panneau);
+  color:var(--on-noir);border:1px solid var(--noir-rule);padding:5px 0;display:none;
+  box-shadow:0 10px 30px rgba(0,0,0,.42)}
+#menu.on{display:block}
+body.ui-verre #menu{backdrop-filter:var(--flou);-webkit-backdrop-filter:var(--flou);
+  border-color:var(--panneau-bord)}
+#menu button{display:flex;width:100%;align-items:center;justify-content:space-between;
+  gap:16px;padding:0 14px;min-height:38px;font-size:13px;text-align:left;
+  color:var(--on-noir)}
+#menu button:hover:not(:disabled){background:rgba(201,162,39,.18);color:var(--moutarde)}
+#menu button:disabled{opacity:.34;cursor:default}
+#menu button kbd{font-family:var(--mono);font-size:9.5px;opacity:.55;
+  border:1px solid var(--noir-rule);padding:1px 5px;white-space:nowrap}
+#menu .sep{height:1px;background:var(--noir-rule);margin:5px 0}
+#menu .tt{font-family:var(--mono);font-size:9px;letter-spacing:.14em;
+  text-transform:uppercase;color:rgba(240,237,231,.5);padding:5px 14px 3px}
+
+/* ── Fiche en sélection multiple ─────────────────────────────────────── */
+#fiche.multi{border-left-color:var(--mesure)}
+#fmulti{display:none}
+#fiche.multi #fmulti{display:block}
+#fiche.multi #fsimple{display:none}
+#fmulti .tot{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;margin:0 0 9px;
+  font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+#fmulti .tot dt{color:rgba(240,237,231,.62)}
+#fmulti .tot dd{margin:0;text-align:right}
+#fmulti .rep{max-height:118px;overflow-y:auto;border-top:1px solid var(--noir-rule);
+  padding-top:7px}
+#fmulti .rep div{display:flex;justify-content:space-between;gap:10px;
+  font-family:var(--mono);font-size:10.5px;line-height:1.75;
+  color:rgba(240,237,231,.78);font-variant-numeric:tabular-nums}
+#fmulti .rep b{color:var(--moutarde);font-weight:600}
+#fmulti .avert{font-family:var(--mono);font-size:9.5px;color:var(--moutarde);
+  margin-top:6px;line-height:1.4}
+
+/* Champ de recherche du tiroir Sélection */
+.trouve{width:calc(100% - 32px);margin:10px 16px 4px;min-height:42px;padding:0 12px;
+  font-family:var(--mono);font-size:12px;color:var(--on-noir);background:#0D0D0D;
+  border:1px solid var(--noir-rule)}
+.trouve:focus{outline:none;border-color:var(--moutarde)}
+
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important}}
 </style>
 </head>
@@ -363,16 +461,30 @@ body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
 <div id="legende" class="verre" hidden></div>
 
 <div id="fiche" class="verre">
-  <div class="tete"><span class="num" id="fNum">—</span><span class="prof" id="fProf">—</span></div>
-  <div class="forme" id="fForme">—</div>
-  <dl>
-    <dt>Calque</dt><dd id="fCalque">—</dd>
-    <dt>Matériau</dt><dd id="fMat">—</dd>
-    <dt>Longueur</dt><dd id="fLong">—</dd>
-    <dt>Section h × b</dt><dd id="fSect">—</dd>
-    <dt>Altimétrie</dt><dd id="fAlti">—</dd>
-    <dt>Excentrement</dt><dd id="fExc">—</dd>
-  </dl>
+  <div id="fsimple">
+    <div class="tete"><span class="num" id="fNum">—</span><span class="prof" id="fProf">—</span></div>
+    <div class="forme" id="fForme">—</div>
+    <dl>
+      <dt>Calque</dt><dd id="fCalque">—</dd>
+      <dt>Matériau</dt><dd id="fMat">—</dd>
+      <dt>Longueur</dt><dd id="fLong">—</dd>
+      <dt>Section h × b</dt><dd id="fSect">—</dd>
+      <dt>Altimétrie</dt><dd id="fAlti">—</dd>
+      <dt>Excentrement</dt><dd id="fExc">—</dd>
+    </dl>
+  </div>
+  <div id="fmulti">
+    <div class="tete"><span class="num" id="fmNb">—</span>
+                      <span class="prof" id="fmCalq">—</span></div>
+    <div class="forme">Métré de la sélection</div>
+    <dl class="tot">
+      <dt>Longueur cumulée</dt><dd id="fmLong">—</dd>
+      <dt>Dont renforts</dt><dd id="fmRenf">—</dd>
+      <dt id="fmMasseT" hidden>Masse</dt><dd id="fmMasse" hidden>—</dd>
+    </dl>
+    <div class="rep" id="fmRep"></div>
+    <div class="avert" id="fmAvert" hidden></div>
+  </div>
   <div class="act">
     <button id="fRenfort">Marquer renfort</button>
     <button id="fIsoler">Isoler calque</button>
@@ -416,8 +528,29 @@ body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
   <button id="tRenfort" disabled><svg viewBox="0 0 24 24"><path d="M4 20 20 4"/><path d="M4 9v11h11"/><path d="M13 4h7v7"/></svg><span>Renfort</span></button>
   <button id="tCut" disabled><svg viewBox="0 0 24 24"><path d="M4 8h16M4 16h16"/><path d="m9 4 6 16"/></svg><span>Coupe</span></button>
   <button id="tMeasure" disabled><svg viewBox="0 0 24 24"><path d="M3 15 15 3l6 6L9 21Z"/><path d="M7 11l2 2M10 8l2 2M13 5l2 2"/></svg><span>Mesure</span></button>
+  <button id="tSelect" disabled><svg viewBox="0 0 24 24"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M8.5 8.5h7v7h-7z"/></svg><span>Sélect.</span></button>
   <button id="tViews" disabled><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="1"/><path d="M3 14l5-4 4 3 3-3 6 5"/></svg><span>Vues</span></button>
   <button id="tReload" hidden><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg><span>MAJ</span></button>
+</nav>
+
+<div id="lasso"></div>
+
+<nav id="menu" class="verre">
+  <div class="tt" id="mTitre">Zone de travail</div>
+  <button id="mRect">Sélection rectangulaire<kbd>glisser</kbd></button>
+  <button id="mTout">Tout sélectionner<kbd>Ctrl A</kbd></button>
+  <button id="mVider">Tout désélectionner<kbd>Échap</kbd></button>
+  <div class="sep"></div>
+  <button id="mCadrer">Recadrer sur la sélection<kbd>F</kbd></button>
+  <button id="mIsoler">Isoler la sélection<kbd>I</kbd></button>
+  <button id="mInverser">Masquer la sélection</button>
+  <button id="mRevoir">Tout réafficher</button>
+  <div class="sep"></div>
+  <button id="mRenfort">Marquer comme renfort<kbd>R</kbd></button>
+  <button id="mMetre">Métré et export…</button>
+  <div class="sep"></div>
+  <button id="mAnnuler">Annuler<kbd>Ctrl Z</kbd></button>
+  <button id="mRetablir">Rétablir<kbd>Ctrl Y</kbd></button>
 </nav>
 
 <input type="file" id="file" accept=".glb,.gltf,.bin,image/*" multiple hidden>
@@ -477,8 +610,26 @@ const VERROU_EMPREINTE = 0x98BDB984;
 /* Déverrouillage : appui long sur le titre en bas à gauche. */
 const VERROU_APPUI_MS = 1500;
 
+/* ── Sélection ────────────────────────────────────────────────────────
+   Une barre estompée par le mode Fantôme est-elle sélectionnable ?
+   Livré à false : le Fantôme sert à faire ressortir les renforts, et un
+   rectangle tiré dans ce mode doit prendre ce qu'on voit, pas les 300
+   barres translucides derrière. Passer à true pour l'inverse. */
+const SELECTION_INCLUT_FANTOME = false;
+
+/* Profondeur de la pile d'annulation (Ctrl+Z). Chaque entrée est un
+   instantané des numéros de renfort : quelques centaines d'entiers. */
+const ANNULATION_PROFONDEUR = 40;
+
+/* Au-delà de ce nombre d'objets, on tente de charger three-mesh-bvh pour
+   accélérer le lancer de rayon. En dessous, c'est du temps perdu : un
+   modèle de 350 barres se vise déjà en une fraction de milliseconde.
+   Si le module ne se charge pas (hors réseau), le viseur standard reste
+   en place — aucune fonction n'est perdue. */
+const BVH_AU_DELA_DE = 3000;
+
 /* Version du viewer : incrémentez ici, la mention suit. */
-const VERSION = '1.11';
+const VERSION = '1.12';
 $id('sCredit').textContent =
   `© v${VERSION} 2026 by Kévin FOMO — Ingénieur structures (CHEBAP)`;
 
@@ -537,13 +688,23 @@ let etiqAxes = [];
 const S = {
   root:null, meshes:[], groups:[], bbox:null, size:1, tris:0, unit:1,
   ambiance:'atelier', teinte:'etat', fantome:false, aretes:'marquees',
-  axes:null, axesOn:false, cartouche:null, legendeOuverte:false,
+  axes:null, axesOn:true, cartouche:null, legendeOuverte:false,
   catalogue:[], modeleId:null, deverrouille:!VERROU,
   brouillon:false, publies:new Set(),
   renforts:new Set(), sel:null, aretesPretes:false,
   cut:{ on:false, axis:1, pos:1, flip:false, plane:new THREE.Plane() },
   measure:{ on:false, pts:[], list:[] },
-  marquage:false, views:[]
+  marquage:false, views:[],
+  /* Sélection multiple : S.selection porte l'ensemble, S.sel la dernière
+     désignée (celle dont la fiche détaillée s'affiche quand il n'y en a
+     qu'une). Les deux restent toujours cohérents. */
+  selection:new Set(),
+  lasso:{ arme:false, actif:false, x0:0, y0:0, x1:0, y1:0 },
+  /* Annulation par instantané du jeu de renforts. Un journal d'opérations
+     inversibles dériverait au premier « Tout effacer » ; l'instantané ne
+     peut pas mentir. */
+  hist:{ passe:[], futur:[] },
+  jeux:[]                       /* sélections nommées */
 };
 
 const fmt = (v,d=3) => v.toFixed(d);
@@ -658,6 +819,22 @@ function installer(root, fichier){
   effacerMesures();
   S.sel = null; S.renforts.clear(); S.aretesPretes = false; S.views = [];
 
+  /* ── DÉFAUT CORRIGÉ : cartouche et files rémanents ───────────────────
+     S.cartouche et S.axes n'étaient RIEN remis à zéro ici. Or ils ne sont
+     renseignés que si le .glb porte le nœud témoin correspondant. Un
+     modèle exporté sans cartouche ne franchissait donc jamais la branche
+     qui l'écrit, et majCartouche() réaffichait celui du modèle PRÉCÉDENT
+     — d'où « V2 le carré_3D.rtd » collé sous n'importe quelle structure.
+     Le nom de fichier n'y était pour rien : c'est un état non purgé.
+     Même faute, mêmes conséquences, pour les files de construction : on
+     traçait au sol la trame du chantier d'avant.
+     Toute donnée lue DANS le modèle se purge ici, sans exception. */
+  S.cartouche = null; S.axes = null;
+  S.selection.clear();
+  S.hist.passe.length = 0; S.hist.futur.length = 0;
+  S.jeux = [];
+  desarmerLasso();
+
   S.root = root; scene.add(root);
   S.meshes = []; S.tris = 0;
   root.traverse(o => {
@@ -731,8 +908,10 @@ function installer(root, fichier){
     `${S.meshes.length} obj · ${k>999?(k/1000).toFixed(1)+' M':k+' k'} tri` +
     (nVar ? ` · <b>${nVar} var.</b>` : '') +
     (S.renforts.size ? ` · <i>${S.renforts.size} renfort</i>` : '');
-  ['tLayers','tCut','tMeasure','tViews','tRenfort','tFantome']
-    .forEach(i => $id(i).disabled = false);
+  ['tLayers','tCut','tMeasure','tViews','tRenfort','tFantome','tSelect']
+    .forEach(i => { const b = $id(i); if(b) b.disabled = false; });
+  S.jeux = lireJeux(S.modeleId);
+  tenterBVH();
   majOnglets();
   toast(`${nomStructure(fichier)} — ${fmt(t.x,1)} × ${fmt(t.z,1)} m, `
         + `hauteur ${fmt(t.y,1)} m`, 4500);
@@ -836,13 +1015,19 @@ function appliquerCouleurs(){
   S.meshes.forEach(m => {
     const mat = m.material;
     const r = estRenfort(m);
-    const estompe = S.fantome && !r && m !== S.sel;
+    const choisie = S.selection.has(m);
+    const estompe = S.fantome && !r && !choisie;
     const couleur = couleurBarre(m, A);
 
     mat.color.set(couleur);
-    if(m === S.sel) mat.emissive.set(A.sombre ? 0x5A4A00 : 0x3E3200);
-    else if(r)      mat.emissive.set(A.sombre ? 0x401505 : 0x2A0E03);
-    else            mat.emissive.set(0x000000);
+    /* La barre « meneuse » (dernière désignée) brille un peu plus fort :
+       sur une sélection de trente barres, on sait laquelle porte la fiche
+       détaillée quand on repasse à une seule. */
+    if(choisie) mat.emissive.set(m === S.sel
+                  ? (A.sombre ? 0x6B5800 : 0x4E4000)
+                  : (A.sombre ? 0x4A3C00 : 0x322800));
+    else if(r)  mat.emissive.set(A.sombre ? 0x401505 : 0x2A0E03);
+    else        mat.emissive.set(0x000000);
 
     /* Fantôme : translucide à 12 %, sans écrire la profondeur pour que
        les renforts opaques restent nets derrière plusieurs épaisseurs. */
@@ -935,6 +1120,28 @@ function appliquerCoupe(){
 const coteVisible = pt => !S.cut.on || S.cut.plane.distanceToPoint(pt) >= -1e-6;
 
 /* ══ sélection et mesure ══ */
+/* Accélérateur de lancer de rayon, chargé SEULEMENT au-delà du seuil et
+   SEULEMENT s'il est joignable. Hors réseau — le cas du chantier — le
+   viseur standard reste en place et rien n'est perdu : c'est un confort
+   sur les très gros modèles, pas une dépendance. */
+let bvhPret = false;
+async function tenterBVH(){
+  if(bvhPret || S.meshes.length < BVH_AU_DELA_DE) return;
+  try {
+    const m = await import(
+      'https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.0/build/index.module.js');
+    THREE.BufferGeometry.prototype.computeBoundsTree = m.computeBoundsTree;
+    THREE.BufferGeometry.prototype.disposeBoundsTree = m.disposeBoundsTree;
+    THREE.Mesh.prototype.raycast = m.acceleratedRaycast;
+    S.meshes.forEach(o => { try { o.geometry.computeBoundsTree(); } catch(e){} });
+    bvhPret = true;
+    toast(`Visée accélérée sur ${S.meshes.length} objets.`, 2000);
+  } catch(e){
+    /* Silence volontaire : l'utilisateur n'a rien demandé, rien ne manque. */
+    console.info('three-mesh-bvh indisponible, visée standard conservée.');
+  }
+}
+
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function viser(x,y){
   ndc.set((x/innerWidth)*2-1, -(y/innerHeight)*2+1);
@@ -1205,12 +1412,149 @@ function majEtiquettes(){
   });
 }
 
-/* ══ fiche ══ */
-function selectionner(mesh){
-  S.sel = mesh || null;
+/* ══ SÉLECTION ═════════════════════════════════════════════════════════
+   S.selection est la vérité ; S.sel n'en est que la dernière entrée, pour
+   la fiche détaillée. Toute porte d'entrée passe par poserSelection() :
+   une seule fonction met les deux d'accord, la fiche à jour et repeint. */
+function poserSelection(meshes, mode = 'remplacer'){
+  const liste = (meshes || []).filter(Boolean);
+  if(mode === 'remplacer'){
+    S.selection.clear();
+    liste.forEach(m => S.selection.add(m));
+    S.sel = liste.length ? liste[liste.length-1] : null;
+  } else if(mode === 'ajouter'){
+    liste.forEach(m => S.selection.add(m));
+    if(liste.length) S.sel = liste[liste.length-1];
+  } else if(mode === 'basculer'){
+    liste.forEach(m => S.selection.has(m) ? S.selection.delete(m)
+                                          : S.selection.add(m));
+    S.sel = S.selection.has(liste[liste.length-1])
+            ? liste[liste.length-1]
+            : [...S.selection].pop() || null;
+  } else if(mode === 'retirer'){
+    liste.forEach(m => S.selection.delete(m));
+    if(!S.selection.has(S.sel)) S.sel = [...S.selection].pop() || null;
+  }
+  if(!S.selection.size) S.sel = null;
+  majFiche();
   appliquerCouleurs();
+  if(ongletOuvert === 'selection') dessinerTiroir('selection');
+}
+
+/* Compatibilité : l'ancienne signature reste valable partout où elle
+   était appelée (liste des renforts, mesure, Échap…). */
+function selectionner(mesh){ poserSelection(mesh ? [mesh] : [], 'remplacer'); }
+
+/* Une barre est-elle candidate à la sélection dans l'état actuel ?
+   Trois filtres, dans l'ordre où ils coûtent le moins cher. */
+function selectionnable(m){
+  if(!m.visible) return false;                       /* calque éteint */
+  if(!SELECTION_INCLUT_FANTOME && S.fantome && !estRenfort(m)) return false;
+  return true;
+}
+
+/* ══ métré ══════════════════════════════════════════════════════════════
+   Aucune masse n'est déduite : le .glb ne porte pas de densité et
+   l'inventer serait une faute. La ligne « Masse » n'apparaît que si
+   TOUTES les barres de la sélection portent le champ. */
+function metrer(meshes){
+  const parProfil = new Map();
+  let total = 0, sansLongueur = 0, masse = 0, avecMasse = 0, nRenf = 0;
+  meshes.forEach(m => {
+    const d = m.userData || {};
+    const L = (d.longueur != null) ? d.longueur * S.unit : null;
+    if(L == null) sansLongueur++; else total += L;
+    if(d.masse != null){ masse += d.masse; avecMasse++; }
+    if(estRenfort(m)) nRenf++;
+    const cle = d.profil || '—';
+    if(!parProfil.has(cle)) parProfil.set(cle, { profil:cle, n:0, L:0 });
+    const e = parProfil.get(cle); e.n++; if(L != null) e.L += L;
+  });
+  return { nb:meshes.length, longueur:total, sansLongueur, renforts:nRenf,
+           masse:(avecMasse === meshes.length && meshes.length) ? masse : null,
+           profils:[...parProfil.values()].sort((a,b) => b.L - a.L) };
+}
+
+/* Numéros de barre d'une sélection, triés, sans trou de numérotation. */
+const numerosDe = meshes => [...new Set(meshes
+  .map(m => m.userData.numero).filter(n => Number.isInteger(n) && n > 0))]
+  .sort((a,b) => a-b);
+
+/* ══ Syntaxe SelList de Robot ═══════════════════════════════════════════
+   « 155A168 » = plage, « 23A107P21 » = plage avec pas (§10.10). Une
+   progression de deux termes reste écrite en clair : Robot l'accepterait,
+   mais deux nombres se relisent sans ambiguïté et ne coûtent rien.
+   Vérifié par aller-retour sur six jeux avant intégration. */
+function compresserSelList(nums){
+  const v = [...new Set(nums.filter(n => Number.isInteger(n) && n > 0))]
+              .sort((a,b) => a-b);
+  if(!v.length) return '';
+  const out = []; let i = 0;
+  while(i < v.length){
+    let fin = i, pas = 0;
+    if(i + 1 < v.length){
+      const p = v[i+1] - v[i];
+      if(p > 0){
+        let j = i;
+        while(j + 1 < v.length && v[j+1] - v[j] === p) j++;
+        if(j > fin){ fin = j; pas = p; }
+      }
+    }
+    if(fin - i + 1 >= 3){
+      out.push(pas === 1 ? `${v[i]}A${v[fin]}` : `${v[i]}A${v[fin]}P${pas}`);
+      i = fin + 1;
+    } else { out.push(String(v[i])); i++; }
+  }
+  return out.join(' ');
+}
+
+/* ══ fiche ══ */
+function majFiche(){
   const f = $id('fiche');
-  if(!mesh){ f.classList.remove('on'); return; }
+  const n = S.selection.size;
+  if(!n){ f.classList.remove('on','multi','renfort'); return; }
+  f.classList.add('on');
+  if(n > 1){ ficheMultiple(); return; }
+  f.classList.remove('multi');
+  ficheSimple(S.sel);
+}
+
+function ficheMultiple(){
+  const f = $id('fiche');
+  const liste = [...S.selection];
+  const M = metrer(liste);
+  f.classList.add('multi');
+  f.classList.remove('renfort');
+  $id('fmNb').textContent = `${M.nb} barres`;
+  const calques = new Set(liste.map(m => (S.groups[m.userData._g]||{}).nom || '—'));
+  $id('fmCalq').textContent = calques.size === 1
+    ? [...calques][0] : `${calques.size} calques`;
+  $id('fmLong').textContent = M.longueur ? fmt(M.longueur,2)+' m' : '—';
+  $id('fmRenf').textContent = M.renforts ? `${M.renforts}` : '—';
+  const mt = $id('fmMasseT'), md = $id('fmMasse');
+  if(M.masse != null){ mt.hidden = md.hidden = false;
+    md.textContent = (M.masse/1000).toFixed(2)+' t'; }
+  else { mt.hidden = md.hidden = true; }
+  $id('fmRep').innerHTML = M.profils.slice(0,14).map(p =>
+    `<div><span>${p.profil} <b>×${p.n}</b></span>` +
+    `<span>${p.L ? fmt(p.L,2)+' m' : '—'}</span></div>`).join('')
+    + (M.profils.length > 14
+       ? `<div><span>… ${M.profils.length-14} autres</span><span></span></div>` : '');
+  const av = $id('fmAvert');
+  if(M.sansLongueur){
+    av.hidden = false;
+    av.textContent = `${M.sansLongueur} barre(s) sans longueur déclarée : `
+      + `non comptée(s) dans le cumul.`;
+  } else av.hidden = true;
+  const tous = liste.length && liste.every(estRenfort);
+  $id('fRenfort').classList.toggle('on', tous);
+  $id('fRenfort').textContent = tous
+    ? `Retirer ${liste.length} renforts` : `Marquer ${liste.length} renforts`;
+}
+
+function ficheSimple(mesh){
+  const f = $id('fiche');
+  if(!mesh) return;
   const d = mesh.userData;
   const bb = new THREE.Box3().setFromObject(mesh).getSize(new THREE.Vector3());
   const r = estRenfort(mesh);
@@ -1245,28 +1589,183 @@ function selectionner(mesh){
   $id('fRenfort').classList.toggle('on', r);
   $id('fRenfort').textContent = r ? 'Renfort ✓' : 'Marquer renfort';
   f.classList.toggle('renfort', r);
-  f.classList.add('on');
 }
-function basculerRenfort(mesh){
-  const n = mesh.userData.numero;
-  if(n == null){ toast('Objet sans numéro de barre.'); return; }
-  S.renforts.has(n) ? S.renforts.delete(n) : S.renforts.add(n);
+
+/* ══ ANNULATION ════════════════════════════════════════════════════════
+   Instantané du jeu de renforts avant CHAQUE mutation. Toute porte de
+   sortie qui touche S.renforts appelle noterRenforts() d'abord — sans
+   exception, sinon la pile ment. */
+function noterRenforts(){
+  S.hist.passe.push(new Set(S.renforts));
+  if(S.hist.passe.length > ANNULATION_PROFONDEUR) S.hist.passe.shift();
+  S.hist.futur.length = 0;      /* une action neuve coupe le futur */
+  majMenu();
+}
+function appliquerJeuRenforts(set){
+  S.renforts = new Set(set);
   ecrireBrouillon(S.modeleId);
-  appliquerCouleurs();
-  if(S.sel === mesh) selectionner(mesh);
+  appliquerCouleurs(); majPlaque(); majFiche();
   if(ongletOuvert === 'renfort') dessinerTiroir('renfort');
-  majPlaque();
-  toast(S.renforts.has(n) ? `B${n} marquée renfort` : `B${n} retirée des renforts`, 1400);
+  majMenu();
 }
+function annuler(){
+  if(!S.hist.passe.length){ toast('Rien à annuler.', 1200); return; }
+  S.hist.futur.push(new Set(S.renforts));
+  appliquerJeuRenforts(S.hist.passe.pop());
+  toast(`Annulé — ${S.renforts.size} renfort(s)`, 1500);
+}
+function retablir(){
+  if(!S.hist.futur.length){ toast('Rien à rétablir.', 1200); return; }
+  S.hist.passe.push(new Set(S.renforts));
+  appliquerJeuRenforts(S.hist.futur.pop());
+  toast(`Rétabli — ${S.renforts.size} renfort(s)`, 1500);
+}
+
+/* ══ RENFORTS PAR LOT ══════════════════════════════════════════════════
+   Règle de bascule sur un lot : si TOUTES sont déjà renfort on les
+   retire, sinon on marque tout. C'est la seule règle qui ne surprenne
+   jamais — un basculement barre à barre sur un lot mixte donnerait un
+   résultat que personne ne prévoit. */
+function basculerRenforts(meshes){
+  const nums = numerosDe(meshes);
+  if(!nums.length){ toast('Aucune barre numérotée dans la sélection.'); return; }
+  const sansNum = meshes.length - nums.length;
+  const tous = nums.every(n => S.renforts.has(n));
+  noterRenforts();
+  nums.forEach(n => tous ? S.renforts.delete(n) : S.renforts.add(n));
+  appliquerJeuRenforts(S.renforts);
+  const verbe = tous ? 'retirée(s) des renforts' : 'marquée(s) renfort';
+  toast(`${nums.length} barre(s) ${verbe}`
+        + (sansNum ? ` · ${sansNum} sans numéro ignorée(s)` : ''), 1900);
+}
+/* Ancienne signature conservée : le mode « désignation » au doigt et la
+   liste des renforts l'appellent toujours. */
+function basculerRenfort(mesh){ basculerRenforts([mesh]); }
 function majPlaque(){
   const s = $id('pStats');
   s.innerHTML = s.innerHTML.replace(/ · <i>.*?<\/i>/, '')
     + (S.renforts.size ? ` · <i>${S.renforts.size} renfort</i>` : '');
 }
 
+/* ══ RECHERCHE ═════════════════════════════════════════════════════════
+   Numéros (« B142 », « 142 », « 12,15,20 », « 12A20 » en syntaxe Robot),
+   sinon recherche textuelle sur le profilé, le calque et le groupe.
+   Ne retient que ce qui est effectivement affiché.
+
+   ── Piège écarté ────────────────────────────────────────────────────
+   « IPE 240 » contient un nombre. Une lecture jeton par jeton en tirait
+   [240] et sélectionnait LA BARRE 240 au lieu de chercher le profilé.
+   La voie numérique n'est donc empruntée que si TOUS les jetons sont des
+   numéros ou des plages — un seul mot suffit à basculer en recherche
+   textuelle. Défaut trouvé au banc, pas à l'usage. */
+const JETON_NUM = /^(?:\d+|\d+A\d+|\d+A\d+P\d+)$/i;
+function decouper(txt){
+  return String(txt).trim().split(/[\s,;]+/).filter(Boolean);
+}
+function estRequeteNumerique(txt){
+  const j = decouper(txt);
+  return j.length > 0 && j.every(t => JETON_NUM.test(t.replace(/^B/i,'')));
+}
+function lireNumeros(txt){
+  const out = [];
+  decouper(txt).forEach(t => {
+    const u = t.replace(/^B/i,'');
+    let m = /^(\d+)A(\d+)P(\d+)$/i.exec(u);
+    if(m){ for(let k=+m[1];k<=+m[2];k+=+m[3]) out.push(k); return; }
+    m = /^(\d+)A(\d+)$/i.exec(u);
+    if(m){ for(let k=+m[1];k<=+m[2];k++) out.push(k); return; }
+    if(/^\d+$/.test(u)) out.push(+u);
+  });
+  return out;
+}
+function selectionnerNumeros(nums){
+  const cible = new Set(nums);
+  const pris = S.meshes.filter(m => cible.has(m.userData.numero) && selectionnable(m));
+  const absents = nums.length - pris.length;
+  poserSelection(pris, 'remplacer');
+  return { pris, absents };
+}
+function lancerRecherche(txt){
+  const t = (txt || '').trim();
+  if(!t){ toast('Saisissez un numéro, un profilé ou un calque.'); return; }
+  const nums = estRequeteNumerique(t) ? lireNumeros(t) : [];
+  if(nums.length){
+    const { pris, absents } = selectionnerNumeros(nums);
+    if(pris.length) cadrerSelection();
+    toast(pris.length
+      ? `${pris.length} barre(s) trouvée(s)`
+        + (absents ? ` · ${absents} absente(s) ou masquée(s)` : '')
+      : 'Aucune barre visible avec ce numéro.', 2400);
+    return;
+  }
+  const q = t.toLowerCase();
+  const pris = S.meshes.filter(m => {
+    if(!selectionnable(m)) return false;
+    const d = m.userData;
+    const g = (S.groups[d._g] || {}).nom || '';
+    return [d.profil, d.calque, d.groupe, g].filter(Boolean)
+             .join(' ').toLowerCase().includes(q);
+  });
+  poserSelection(pris, 'remplacer');
+  if(pris.length) cadrerSelection();
+  toast(pris.length ? `${pris.length} barre(s) pour « ${t} »`
+                    : `Rien de visible pour « ${t} ».`, 2400);
+}
+
+function copierTexte(txt, message){
+  const t = document.createElement('textarea');
+  t.value = txt; t.style.position = 'fixed'; t.style.opacity = '0';
+  document.body.appendChild(t); t.select(); t.setSelectionRange(0, 99999);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch(e){ ok = false; }
+  document.body.removeChild(t);
+  toast(ok ? message : 'Copie refusée par le navigateur.', 2800);
+}
+
+/* Sélections nommées : mêmes clés locales que les brouillons de renfort,
+   pour que tout ce qui est propre à un chantier se purge ensemble. */
+const cleJeux = id => 'kf.selections.' + (id || 'sans-modele');
+function lireJeux(id){
+  try { const j = JSON.parse(localStorage.getItem(cleJeux(id)) || '[]');
+        return Array.isArray(j) ? j : []; }
+  catch(e){ return []; }
+}
+function ecrireJeux(){
+  try {
+    if(S.jeux.length) localStorage.setItem(cleJeux(S.modeleId), JSON.stringify(S.jeux));
+    else localStorage.removeItem(cleJeux(S.modeleId));
+  } catch(e){ /* navigation privée : la session reste utilisable */ }
+}
+
+/* Masquer / réafficher, à l'échelle de la sélection. */
+function masquerSelection(){
+  if(!S.selection.size) return;
+  S.selection.forEach(m => m.visible = false);
+  poserSelection([], 'remplacer');
+  majLegende();
+  toast('Sélection masquée. « Tout réafficher » les rétablit.', 2400);
+}
+function isolerSelection(){
+  if(!S.selection.size) return;
+  const garde = new Set(S.selection);
+  S.meshes.forEach(m => m.visible = garde.has(m));
+  S.groups.forEach(g => g.on = g.objs.some(o => o.visible));
+  majLegende();
+  if(ongletOuvert === 'layers') dessinerTiroir('layers');
+  cadrerSelection();
+}
+function toutReafficher(){
+  S.groups.forEach(g => { g.on = true; g.objs.forEach(o => o.visible = true); });
+  majLegende(); appliquerCouleurs();
+  if(ongletOuvert === 'layers') dessinerTiroir('layers');
+  toast('Tous les calques rétablis.', 1600);
+}
+
 /* ══ pointeur ══ */
+const estFin = () => matchMedia('(pointer:fine)').matches;
 let appui = null;
 renderer.domElement.addEventListener('pointerdown', e => {
+  if(S.lasso.arme && e.button === 0){ demarrerLasso(e); return; }
   appui = { x:e.clientX, y:e.clientY, t:Date.now() }; });
 renderer.domElement.addEventListener('pointerup', e => {
   if(!appui) return;
@@ -1281,15 +1780,163 @@ renderer.domElement.addEventListener('pointerup', e => {
   } else if(S.marquage){
     if(hit) basculerRenfort(hit.object);
   } else {
-    selectionner(hit ? hit.object : null);
+    /* Ctrl (ou ⌘ sur Mac) ajoute ou retire sans perdre l'existant. */
+    const cumul = e.ctrlKey || e.metaKey || e.shiftKey;
+    if(!hit){ if(!cumul) poserSelection([], 'remplacer'); return; }
+    poserSelection([hit.object], cumul ? 'basculer' : 'remplacer');
   }
 });
+
+/* Double-clic : recadre sur l'objet visé, ou sur la sélection courante. */
+renderer.domElement.addEventListener('dblclick', e => {
+  if(!S.root || S.measure.on) return;
+  const hit = viser(e.clientX, e.clientY);
+  if(hit){ poserSelection([hit.object], 'remplacer'); cadrerSelection(); }
+  else cadrerTout();
+});
+
+function cadrerSelection(){
+  if(!S.selection.size){ cadrerTout(); return; }
+  const b = new THREE.Box3();
+  S.selection.forEach(m => b.union(new THREE.Box3().setFromObject(m)));
+  cadrerTout(b.expandByScalar(S.size * 0.06));
+}
+
+/* ══ RECTANGLE DE SÉLECTION ════════════════════════════════════════════
+   Convention AutoCAD, que l'on retrouve sans l'apprendre :
+     glissé vers la DROITE  → « fenêtre » : la barre doit être ENTIÈREMENT
+                              dans le cadre ;
+     glissé vers la GAUCHE  → « capture » : il suffit qu'elle le touche.
+   Ne prend QUE ce qui est réellement à l'écran : calque éteint, coupe,
+   et — selon SELECTION_INCLUT_FANTOME — barres estompées sont écartées. */
+function armerLasso(on){
+  S.lasso.arme = !!on;
+  document.body.classList.toggle('lasso-arme', S.lasso.arme);
+  if(S.lasso.arme)
+    toast('Glissez pour encadrer. Vers la droite : entièrement contenu. '
+        + 'Vers la gauche : simplement touché.', 4200);
+}
+function desarmerLasso(){
+  S.lasso.arme = S.lasso.actif = false;
+  document.body.classList.remove('lasso-arme');
+  const L = $id('lasso'); if(L){ L.style.display = 'none'; L.removeAttribute('data-mode'); }
+  controls.enabled = true;
+}
+function demarrerLasso(e){
+  S.lasso.actif = true;
+  S.lasso.x0 = S.lasso.x1 = e.clientX;
+  S.lasso.y0 = S.lasso.y1 = e.clientY;
+  controls.enabled = false;                /* sinon la caméra tourne */
+  const L = $id('lasso');
+  L.style.display = 'block';
+  majLasso(e);
+  renderer.domElement.setPointerCapture?.(e.pointerId);
+}
+function majLasso(e){
+  S.lasso.x1 = e.clientX; S.lasso.y1 = e.clientY;
+  const L = $id('lasso');
+  const x = Math.min(S.lasso.x0, S.lasso.x1), y = Math.min(S.lasso.y0, S.lasso.y1);
+  const w = Math.abs(S.lasso.x1-S.lasso.x0), h = Math.abs(S.lasso.y1-S.lasso.y0);
+  L.style.left = x+'px'; L.style.top = y+'px';
+  L.style.width = w+'px'; L.style.height = h+'px';
+  const capture = S.lasso.x1 < S.lasso.x0;
+  L.classList.toggle('capture', capture);
+  L.dataset.mode = capture ? 'touché' : 'contenu';
+}
+function finirLasso(e, cumul){
+  if(!S.lasso.actif) return;
+  majLasso(e);
+  const R = { xmin:Math.min(S.lasso.x0,S.lasso.x1), xmax:Math.max(S.lasso.x0,S.lasso.x1),
+              ymin:Math.min(S.lasso.y0,S.lasso.y1), ymax:Math.max(S.lasso.y0,S.lasso.y1),
+              fenetre: S.lasso.x1 >= S.lasso.x0 };
+  desarmerLasso();
+  /* Un cadre minuscule est un clic manqué, pas une sélection vide. */
+  if(R.xmax-R.xmin < 4 && R.ymax-R.ymin < 4){ toast('Cadre trop petit.', 1400); return; }
+  const pris = barresDansRect(R);
+  poserSelection(pris, cumul ? 'ajouter' : 'remplacer');
+  toast(pris.length
+    ? `${pris.length} barre(s) — mode ${R.fenetre ? 'contenu' : 'touché'}`
+    : 'Aucune barre visible dans le cadre.', 2000);
+}
+addEventListener('pointermove', e => { if(S.lasso.actif) majLasso(e); });
+addEventListener('pointerup', e => {
+  if(S.lasso.actif) finirLasso(e, e.ctrlKey || e.metaKey || e.shiftKey); });
+addEventListener('pointercancel', () => { if(S.lasso.actif) desarmerLasso(); });
+
+const _c = new THREE.Vector3(), _b3 = new THREE.Box3();
+function barresDansRect(R){
+  const out = [];
+  const W = innerWidth, H = innerHeight;
+  S.meshes.forEach(m => {
+    if(!selectionnable(m)) return;
+    _b3.setFromObject(m);
+    /* Huit coins projetés. Le seul centroïde raterait une poutre qui
+       traverse le cadre sans que son milieu y soit. */
+    let dedans = 0, devant = 0, total = 0;
+    let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+    let unVisible = false;
+    for(let i=0;i<8;i++){
+      _c.set(i&1 ? _b3.max.x : _b3.min.x,
+             i&2 ? _b3.max.y : _b3.min.y,
+             i&4 ? _b3.max.z : _b3.min.z);
+      if(coteVisible(_c)) unVisible = true;      /* pas entièrement coupé */
+      const p = _c.clone().project(camera);
+      total++;
+      if(p.z > 1) continue;                      /* derrière la caméra */
+      devant++;
+      const sx = (p.x*0.5+0.5)*W, sy = (-p.y*0.5+0.5)*H;
+      bx0 = Math.min(bx0,sx); bx1 = Math.max(bx1,sx);
+      by0 = Math.min(by0,sy); by1 = Math.max(by1,sy);
+      if(sx >= R.xmin && sx <= R.xmax && sy >= R.ymin && sy <= R.ymax) dedans++;
+    }
+    if(!devant) return;
+    if(S.cut.on && !unVisible) return;           /* entièrement retranchée */
+    if(R.fenetre){
+      if(devant === total && dedans === total) out.push(m);
+    } else {
+      if(!(bx1 < R.xmin || bx0 > R.xmax || by1 < R.ymin || by0 > R.ymax)) out.push(m);
+    }
+  });
+  return out;
+}
+
+/* ══ MENU CONTEXTUEL ═══════════════════════════════════════════════════
+   Clic droit sur la zone de travail. Sur écran tactile il n'existe pas de
+   clic droit : le menu n'est proposé qu'aux pointeurs fins. */
+renderer.domElement.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if(!S.root || !estFin()) return;
+  ouvrirMenu(e.clientX, e.clientY);
+});
+function ouvrirMenu(x, y){
+  const M = $id('menu');
+  majMenu();
+  M.classList.add('on');
+  /* Replié vers l'intérieur si l'on ouvre près d'un bord. */
+  const r = M.getBoundingClientRect();
+  M.style.left = Math.min(x, innerWidth  - r.width  - 8) + 'px';
+  M.style.top  = Math.min(y, innerHeight - r.height - 8) + 'px';
+}
+function fermerMenu(){ $id('menu').classList.remove('on'); }
+function majMenu(){
+  const n = S.selection.size, a = n > 0;
+  $id('mTitre').textContent = a
+    ? `${n} barre${n>1?'s':''} sélectionnée${n>1?'s':''}` : 'Zone de travail';
+  [['mVider',a],['mCadrer',a],['mIsoler',a],['mInverser',a],
+   ['mRenfort',a && S.deverrouille],['mMetre',a]]
+    .forEach(([id,ok]) => { const b = $id(id); if(b) b.disabled = !ok; });
+  const an = $id('mAnnuler'), re = $id('mRetablir');
+  if(an) an.disabled = !S.hist.passe.length;
+  if(re) re.disabled = !S.hist.futur.length;
+}
+document.addEventListener('pointerdown', e => {
+  if(!e.target.closest('#menu')) fermerMenu(); }, true);
 
 /* ══ tiroir ══ */
 let ongletOuvert = null;
 const TITRES = { layers:'Calques et couleurs', measure:'Mesures',
                  views:'Vues et image', renfort:'Renforts',
-                 modeles:'Chantiers' };
+                 modeles:'Chantiers', selection:'Sélection et métré' };
 function ouvrirTiroir(k){
   if(ongletOuvert === k){ fermerTiroir(); return; }
   ongletOuvert = k; $id('sheetTitle').textContent = TITRES[k];
@@ -1307,6 +1954,8 @@ document.addEventListener('pointerdown', e => {
 }, true);
 function majOnglets(){
   $id('tLayers').classList.toggle('on', ongletOuvert === 'layers');
+  { const s = $id('tSelect');
+    if(s) s.classList.toggle('on', ongletOuvert === 'selection' || S.lasso.arme); }
   $id('tViews').classList.toggle('on', ongletOuvert === 'views');
   $id('tMeasure').classList.toggle('on', S.measure.on);
   $id('tCut').classList.toggle('on', S.cut.on);
@@ -1468,8 +2117,9 @@ function dessinerTiroir(key){
         cadrerTout(new THREE.Box3().setFromObject(m).expandByScalar(S.size*0.08)); };
       if(S.deverrouille){
         const d = el('button','solo','Retirer');
-        d.onclick = () => { S.renforts.delete(n); appliquerCouleurs();
-                            majPlaque(); dessinerTiroir('renfort'); };
+        d.onclick = () => { noterRenforts(); S.renforts.delete(n);
+                            appliquerJeuRenforts(S.renforts);
+                            dessinerTiroir('renfort'); };
         r.append(go, d);
       } else {
         const v = el('span','solo','Localiser');
@@ -1513,17 +2163,124 @@ function dessinerTiroir(key){
       b.appendChild(l);
 
       const a = el('button','ghost','Revenir aux renforts publiés');
-      a.onclick = () => { effacerBrouillon(S.modeleId);
+      a.onclick = () => { noterRenforts(); effacerBrouillon(S.modeleId);
         S.renforts = new Set(S.publies); appliquerCouleurs();
-        majPlaque(); majLegende(); dessinerTiroir('renfort');
-        toast('Affichage aligné sur renforts.json.'); };
+        majPlaque(); majLegende(); majFiche(); dessinerTiroir('renfort');
+        toast('Affichage aligné sur renforts.json. Ctrl+Z revient en arrière.'); };
       b.appendChild(a);
 
       const z = el('button','ghost','Tout effacer');
-      z.onclick = () => { S.renforts.clear(); ecrireBrouillon(S.modeleId);
-                          appliquerCouleurs(); majPlaque(); majLegende();
-                          dessinerTiroir('renfort'); };
+      z.onclick = () => { noterRenforts(); S.renforts.clear();
+                          appliquerJeuRenforts(S.renforts); majLegende();
+                          dessinerTiroir('renfort');
+                          toast('Renforts effacés. Ctrl+Z annule.', 2600); };
       b.appendChild(z);
+    }
+  }
+
+  if(key === 'selection'){
+    /* ── Recherche ─────────────────────────────────────────────────────
+       Trois clés acceptées : « B142 » ou « 142 » (numéro), un profilé
+       (« IPE 240 »), un calque. Plusieurs numéros séparés par virgule ou
+       espace, et la syntaxe Robot « 12A20 » est relue telle quelle. */
+    const q = el('input','trouve'); q.type = 'search';
+    q.placeholder = 'B142 · 12A20 · IPE 240 · nom de calque';
+    q.onkeydown = ev => { if(ev.key === 'Enter'){ ev.preventDefault();
+                            lancerRecherche(q.value); } };
+    b.appendChild(q);
+    const go = el('button','ghost','Rechercher et sélectionner');
+    go.onclick = () => lancerRecherche(q.value);
+    b.appendChild(go);
+
+    const liste = [...S.selection];
+    const h = el('div','row head');
+    h.append(el('span','lbl', liste.length
+      ? `${liste.length} barre(s) sélectionnée(s)` : 'Aucune sélection'));
+    b.appendChild(h);
+
+    if(!liste.length){
+      b.appendChild(el('div','note',
+        'Ctrl + clic ajoute une barre. Clic droit dans la vue ouvre la '
+        + 'sélection rectangulaire : vers la droite pour ne prendre que '
+        + 'les barres entièrement encadrées, vers la gauche pour prendre '
+        + 'aussi celles qui touchent le cadre.'));
+    } else {
+      const M = metrer(liste);
+      const ligne = (t,v) => { const r = el('div','row');
+        r.append(el('span','lbl',t), el('span','val',v)); b.appendChild(r); };
+      ligne('Longueur cumulée', M.longueur ? fmt(M.longueur,2)+' m' : '—');
+      ligne('Profilés distincts', String(M.profils.length));
+      ligne('Dont renforts', String(M.renforts));
+      if(M.masse != null) ligne('Masse', (M.masse/1000).toFixed(2)+' t');
+      if(M.sansLongueur)
+        b.appendChild(el('div','note alerte',
+          `${M.sansLongueur} barre(s) sans longueur déclarée dans le modèle : `
+          + `exclue(s) du cumul. Le total affiché est donc un minorant.`));
+
+      const h2 = el('div','row head');
+      h2.append(el('span','lbl','Répartition par profilé'));
+      b.appendChild(h2);
+      M.profils.forEach(p => ligne(`${p.profil} × ${p.n}`,
+                                   p.L ? fmt(p.L,2)+' m' : '—'));
+
+      /* ── Export vers Robot ───────────────────────────────────────────
+         Syntaxe SelList (§10.10) : se colle directement dans le champ de
+         sélection de Robot ou dans la définition d'un groupe. */
+      const nums = numerosDe(liste);
+      const sel = compresserSelList(nums);
+      const h3 = el('div','row head');
+      h3.append(el('span','lbl','Export Robot (SelList)'));
+      b.appendChild(h3);
+      const ta = el('textarea'); ta.id = 'copie'; ta.readOnly = true;
+      ta.value = sel || '(aucune barre numérotée)';
+      b.appendChild(ta);
+      if(nums.length < liste.length)
+        b.appendChild(el('div','note',
+          `${liste.length - nums.length} objet(s) sans numéro de barre : `
+          + `absent(s) de la liste Robot.`));
+
+      const cs = el('button','ghost','Copier la sélection Robot');
+      cs.onclick = () => copierTexte(sel,
+        'Collez dans le champ de sélection de Robot.');
+      b.appendChild(cs);
+
+      const cc = el('button','ghost','Copier le métré (CSV)');
+      cc.onclick = () => {
+        const l = ['profil;nombre;longueur_m'];
+        M.profils.forEach(p => l.push(
+          `${p.profil};${p.n};${p.L ? p.L.toFixed(3) : ''}`));
+        l.push(`TOTAL;${M.nb};${M.longueur.toFixed(3)}`);
+        copierTexte(l.join('\n'), 'Métré copié — collez dans un tableur.');
+      };
+      b.appendChild(cc);
+
+      const cj = el('button','ghost','Enregistrer cette sélection');
+      cj.onclick = () => {
+        const nom = prompt('Nom de la sélection :',
+                           'Jeu ' + (S.jeux.length + 1));
+        if(!nom) return;
+        S.jeux.push({ nom, nums:nums.slice() });
+        ecrireJeux(); dessinerTiroir('selection');
+        toast(`« ${nom} » enregistrée (${nums.length} barres).`);
+      };
+      b.appendChild(cj);
+    }
+
+    if(S.jeux.length){
+      const h4 = el('div','row head');
+      h4.append(el('span','lbl','Sélections enregistrées'));
+      b.appendChild(h4);
+      S.jeux.forEach((j, i) => {
+        const r = el('div','row');
+        const go2 = el('span','lbl', `${j.nom} · ${j.nums.length} barres`);
+        go2.style.cursor = 'pointer';
+        go2.onclick = () => { selectionnerNumeros(j.nums); cadrerSelection(); };
+        const del = el('button','solo','Retirer');
+        del.onclick = () => { S.jeux.splice(i,1); ecrireJeux();
+                              dessinerTiroir('selection'); };
+        r.append(go2, del);
+        b.appendChild(r);
+      });
     }
   }
 
@@ -1650,16 +2407,41 @@ $id('tFantome').onclick = () => {
   toast(S.fantome ? 'Existant estompé — les renforts ressortent.'
                   : 'Existant rétabli.');
 };
-$id('fRenfort').onclick = () => { if(S.sel) basculerRenfort(S.sel); };
+$id('fRenfort').onclick = () => {
+  if(!S.selection.size) return;
+  basculerRenforts([...S.selection]);
+};
 $id('fIsoler').onclick = () => {
-  if(!S.sel) return;
-  const g = S.groups[S.sel.userData._g]; if(!g) return;
-  const seul = S.groups.every(x => x===g ? x.on : !x.on);
-  S.groups.forEach(x => { x.on = seul ? true : (x===g);
+  if(!S.selection.size) return;
+  /* Une seule barre : on isole SON calque, comportement d'origine.
+     Plusieurs : on isole les calques concernés — isoler la sélection
+     elle-même est proposé séparément dans le menu contextuel. */
+  const cibles = new Set([...S.selection]
+    .map(m => S.groups[m.userData._g]).filter(Boolean));
+  if(!cibles.size) return;
+  const dejaSeuls = S.groups.every(x => cibles.has(x) ? x.on : !x.on);
+  S.groups.forEach(x => { x.on = dejaSeuls ? true : cibles.has(x);
                           x.objs.forEach(o => o.visible = x.on); });
-  majLegende();
+  majLegende(); appliquerCouleurs();
   if(ongletOuvert === 'layers') dessinerTiroir('layers');
 };
+
+/* ══ menu contextuel : branchements ══ */
+$id('mRect').onclick     = () => { fermerMenu(); armerLasso(true); };
+$id('mTout').onclick     = () => { fermerMenu();
+  poserSelection(S.meshes.filter(selectionnable), 'remplacer');
+  toast(`${S.selection.size} barre(s) visibles sélectionnées`, 1800); };
+$id('mVider').onclick    = () => { fermerMenu(); poserSelection([], 'remplacer'); };
+$id('mCadrer').onclick   = () => { fermerMenu(); cadrerSelection(); };
+$id('mIsoler').onclick   = () => { fermerMenu(); isolerSelection(); };
+$id('mInverser').onclick = () => { fermerMenu(); masquerSelection(); };
+$id('mRevoir').onclick   = () => { fermerMenu(); toutReafficher(); };
+$id('mRenfort').onclick  = () => { fermerMenu();
+  if(S.selection.size) basculerRenforts([...S.selection]); };
+$id('mMetre').onclick    = () => { fermerMenu(); ouvrirTiroir('selection'); };
+$id('mAnnuler').onclick  = () => { fermerMenu(); annuler(); };
+$id('mRetablir').onclick = () => { fermerMenu(); retablir(); };
+$id('tSelect').onclick   = () => ouvrirTiroir('selection');
 $id('tMeasure').onclick = () => {
   S.measure.on = !S.measure.on;
   if(S.measure.on){ S.marquage = false; selectionner(null); ouvrirTiroir('measure'); }
@@ -1691,12 +2473,42 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 addEventListener('keydown', e => {
-  if(e.key === 'f') cadrerTout();
-  if(e.key === 'g') $id('tFantome').click();
-  if(e.key === 'a'){ S.axesOn = !S.axesOn; groupeAxes.visible = S.axesOn;
-                     if(ongletOuvert === 'layers') dessinerTiroir('layers'); }
-  if(e.key === 'Escape'){ fermerTiroir(); selectionner(null);
-                          S.marquage = false; majOnglets(); }
+  /* Ne jamais capter une touche pendant une saisie : la recherche du
+     tiroir et celle de l'accueil sont des champs de texte. */
+  const t = e.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)){
+    if(e.key === 'Escape') t.blur();
+    return;
+  }
+
+  /* Combinaisons avec Ctrl / ⌘ — traitées AVANT les touches nues, sinon
+     Ctrl+A déclencherait aussi la bascule des files de construction. */
+  if(e.ctrlKey || e.metaKey){
+    const k = e.key.toLowerCase();
+    if(k === 'z' && !e.shiftKey){ e.preventDefault(); annuler(); return; }
+    if((k === 'z' && e.shiftKey) || k === 'y'){ e.preventDefault(); retablir(); return; }
+    if(k === 'a'){ e.preventDefault();
+      poserSelection(S.meshes.filter(selectionnable), 'remplacer');
+      toast(`${S.selection.size} barre(s) visibles sélectionnées`, 1800); return; }
+    return;
+  }
+
+  switch(e.key){
+    case 'f': case 'F':
+      S.selection.size ? cadrerSelection() : cadrerTout(); break;
+    case 'g': case 'G': $id('tFantome').click(); break;
+    case 'i': case 'I': isolerSelection(); break;
+    case 'r': case 'R':
+      if(S.deverrouille && S.selection.size) basculerRenforts([...S.selection]);
+      break;
+    case 'a': case 'A':
+      S.axesOn = !S.axesOn; groupeAxes.visible = S.axesOn;
+      if(ongletOuvert === 'layers') dessinerTiroir('layers'); break;
+    case 'Escape':
+      if(S.lasso.arme || S.lasso.actif){ desarmerLasso(); break; }
+      fermerMenu(); fermerTiroir(); poserSelection([], 'remplacer');
+      S.marquage = false; majOnglets(); break;
+  }
 });
 
 renderer.setAnimationLoop(() => {
