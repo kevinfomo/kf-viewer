@@ -1,5 +1,6 @@
 {
   "_lisezmoi": "Renforts publiés, visibles par tout le monde. Depuis le viewer déverrouillé : Renfort > Copier pour renforts.json, puis collez la ligne ici et validez (Commit). Une clé par chantier, reprenant son id de modeles.json.",
 
-  "le-carre": [355]
+  "le-carre": [355],
+  "OPP0018645-(Renforts-METAL)-ECURIE-W-RACING_3D": [11, 14, 19, 22, 25, 27, 324, 325]
 }
