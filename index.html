@@ -303,6 +303,33 @@ input[type=range]::-moz-range-thumb{width:14px;height:30px;background:var(--mout
   font-size:10px;letter-spacing:.05em;color:var(--noir);background:rgba(250,247,242,.92);
   border:1px solid rgba(26,26,26,.3);border-radius:999px;padding:2px 8px;white-space:nowrap}
 .alabel.niveau{border-radius:2px;font-variant-numeric:tabular-nums}
+/* ── Étiquettes de repérage ────────────────────────────────────────────
+   Même facture que les files de construction, police plus grande : elles
+   portent une indication qu'on lit, pas une cote qu'on décode. */
+.etiq{position:absolute;transform:translate(-50%,-50%);font-family:var(--mono);
+  font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--noir);
+  background:rgba(250,247,242,.95);border:1px solid rgba(26,26,26,.42);
+  border-radius:2px;padding:4px 10px;white-space:nowrap;
+  box-shadow:0 1px 5px rgba(0,0,0,.14)}
+.etiq.pose{border-color:var(--moutarde);border-width:1.5px}
+body.sombre .etiq{color:var(--creme);background:rgba(20,20,20,.92);
+  border-color:rgba(240,237,231,.42)}
+/* Trait de rappel : tracé en SVG plein écran, sous les étiquettes. */
+#rappels{position:fixed;inset:0;z-index:17;pointer-events:none}
+#rappels line{stroke:rgba(26,26,26,.42);stroke-width:1;stroke-dasharray:3 3}
+#rappels circle{fill:none;stroke:rgba(26,26,26,.55);stroke-width:1.2}
+body.sombre #rappels line{stroke:rgba(240,237,231,.42)}
+body.sombre #rappels circle{stroke:rgba(240,237,231,.6)}
+/* Bandeau du mode pose */
+#pose{position:fixed;left:50%;transform:translateX(-50%);z-index:29;
+  top:max(12px,env(safe-area-inset-top));background:var(--moutarde);color:var(--noir);
+  font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:9px 15px;
+  display:none;align-items:center;gap:12px;font-weight:600}
+#pose.on{display:flex}
+#pose button{font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase;border:1px solid rgba(26,26,26,.45);padding:4px 9px;
+  color:var(--noir)}
+body.pose-active canvas{cursor:copy}
 body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
   border-color:rgba(240,237,231,.34)}
 .mlabel{position:absolute;transform:translate(-50%,-50%);background:var(--mesure);color:#fff;
@@ -437,7 +464,14 @@ body.ui-verre #menu{backdrop-filter:var(--flou);-webkit-backdrop-filter:var(--fl
 </head>
 <body>
 
+<svg id="rappels"></svg>
 <div id="labels"></div>
+
+<div id="pose">
+  <span id="poseTxt">Touchez une barre pour y accrocher l'étiquette</span>
+  <button id="poseMode">Mode : barre</button>
+  <button id="poseFin">Terminer</button>
+</div>
 
 <div id="empty">
   <div class="cadre">
@@ -578,6 +612,25 @@ const $id = i => document.getElementById(i);
    modeles.json. Aucune modification de code. */
 const CATALOGUE = 'modeles/modeles.json';
 
+/* Étiquettes de repérage publiées, partagées par tout le monde. Même
+   mécanique à trois étages que les renforts : fichier publié sur GitHub,
+   brouillon local, lien de partage. Voir le tiroir « Étiquettes » pour
+   le bloc à recopier — rien ne s'écrit à la main.
+   Forme du fichier :
+     { "<id-modele>": { "v":1, "e":[ {...}, ... ] } }
+   Une étiquette :
+     t  texte (obligatoire)
+     b  numéro de barre d'ancrage        ─┐ exclusifs :
+     p  point monde [x,y,z] repère glTF  ─┘ l'un OU l'autre
+     c  côté : gauche droite devant derriere haut bas   (défaut droite)
+     s  échelle de police, défaut 1                                  */
+const ETIQUETTES_PUBLIEES = 'modeles/etiquettes.json';
+
+/* Décalage de l'étiquette par rapport à son ancrage, en fraction de la
+   taille du modèle. Assez pour dégager la barre, assez peu pour que le
+   trait de rappel reste court. */
+const ETIQ_DECALAGE = 0.030;
+
 /* Renforts publiés, partagés par tout le monde. Fichier éditable
    directement sur GitHub, sans regénérer le .glb :
    { "le-carre": [12, 45, 67], "halle-nord": [3, 8] }              */
@@ -621,6 +674,32 @@ const SELECTION_INCLUT_FANTOME = false;
    instantané des numéros de renfort : quelques centaines d'entiers. */
 const ANNULATION_PROFONDEUR = 40;
 
+/* ── Lisibilité des renforts à distance ───────────────────────────────
+   MESURE, pas impression : EdgesGeometry trace des lignes de 1 px quelle
+   que soit la distance. Deux arêtes encadrent la barre, soit 2 px
+   incompressibles. Une UPN 140 vue à 40 m ne projette que 2,5 px : le
+   contour occupait donc 100 % de la barre — et il était GRIS pour tout
+   le monde, renforts compris. Le renfort était repeint en gris par son
+   propre contour. Changer la teinte de remplissage n'y pouvait rien.
+   Deux leviers, tous deux à teinte constante :
+     ECLAT      = émissif, rend la barre auto-éclairée donc indépendante
+                  de l'orientation de la lumière (0 = éteint, 1 = plein) ;
+     HALO       = le contour prend la teinte du renfort au lieu du gris,
+                  et reste visible même en mode « arêtes : aucune ». */
+const RENFORT_ECLAT          = 0.62;
+const RENFORT_ECLAT_FANTOME  = 0.92;   /* fantôme : le renfort doit crever l'écran */
+const SELECTION_ECLAT        = 0.55;
+const HALO_RENFORT           = true;
+const HALO_OPACITE           = 0.95;
+
+/* Impulsion de repérage. Un clignotement PERMANENT est écarté : une
+   capture d'écran l'attrape à une phase quelconque et la moitié des
+   renforts manquerait sur la photo envoyée au chantier ; et au-delà de
+   cent barres il devient invivable. L'impulsion sert à TROUVER un objet,
+   pas à signaler un état : deux battements puis extinction. */
+const PULSE_MS     = 1500;
+const PULSE_CYCLES = 2;
+
 /* Au-delà de ce nombre d'objets, on tente de charger three-mesh-bvh pour
    accélérer le lancer de rayon. En dessous, c'est du temps perdu : un
    modèle de 350 barres se vise déjà en une fraction de milliseconde.
@@ -629,7 +708,7 @@ const ANNULATION_PROFONDEUR = 40;
 const BVH_AU_DELA_DE = 3000;
 
 /* Version du viewer : incrémentez ici, la mention suit. */
-const VERSION = '1.12';
+const VERSION = '1.14';
 $id('sCredit').textContent =
   `© v${VERSION} 2026 by Kévin FOMO — Ingénieur structures (CHEBAP)`;
 
@@ -640,16 +719,23 @@ function appliquerUI(){ document.body.classList.toggle('ui-verre', uiVerre); }
 appliquerUI();
 
 /* ══ Ambiances 3D ═══════════════════════════════════════════════════════ */
+/* renfortVif / selVif : MÊME TEINTE que la couleur métier, luminance
+   poussée. Servent au contour et à l'émissif — jamais au remplissage,
+   qui reste #D64518 et ses déclinaisons d'ambiance. La règle « renfort
+   strictement réservé aux états structurels » est donc intacte. */
 const AMBIANCES = {
   atelier: { nom:'Atelier', sombre:false,
              fond:0xFAF7F2, existant:0x8A9099, neutre:0xB9BDC2,
-             renfort:0xD64518, arete:0x1E2023, sol:[0xB8BCB6,0xD6DAD2] },
+             renfort:0xD64518, renfortVif:0xFF5A1E, selVif:0xE8B93A,
+             arete:0x1E2023, sol:[0xB8BCB6,0xD6DAD2] },
   nuit:    { nom:'Nuit', sombre:true,
              fond:0x33363A, existant:0x8B939D, neutre:0x565C63,
-             renfort:0xF06A28, arete:0xE2E6EB, sol:[0x565C62,0x42474C] },
+             renfort:0xF06A28, renfortVif:0xFF8A45, selVif:0xFFD24A,
+             arete:0xE2E6EB, sol:[0x565C62,0x42474C] },
   soleil:  { nom:'Plein soleil', sombre:false,
              fond:0xFFFFFF, existant:0x565D66, neutre:0x9BA2A9,
-             renfort:0xD62B0A, arete:0x000000, sol:[0x9AA0A6,0xC9CDD1] }
+             renfort:0xD62B0A, renfortVif:0xFF4310, selVif:0xD9A400,
+             arete:0x000000, sol:[0x9AA0A6,0xC9CDD1] }
 };
 /* Palette de différenciation : saturée, écartée en teinte. */
 const PALETTE = [0x2E6F9E,0xC8551F,0x4C8B3F,0x8E4585,0x1F8A8C,0xB08A00,
@@ -704,7 +790,12 @@ const S = {
      inversibles dériverait au premier « Tout effacer » ; l'instantané ne
      peut pas mentir. */
   hist:{ passe:[], futur:[] },
-  jeux:[]                       /* sélections nommées */
+  jeux:[],                      /* sélections nommées */
+  pulses:new Map(),             /* mesh -> intensité émissive courante */
+  /* Étiquettes de repérage. etiqOn pilote l'affichage global (tiroir),
+     etiqPublies garde la version du fichier pour détecter un brouillon. */
+  etiq:[], etiqOn:true, etiqPublies:'[]',
+  pose:{ on:false, mode:'barre' }
 };
 
 const fmt = (v,d=3) => v.toFixed(d);
@@ -832,7 +923,10 @@ function installer(root, fichier){
   S.cartouche = null; S.axes = null;
   S.selection.clear();
   S.hist.passe.length = 0; S.hist.futur.length = 0;
-  S.jeux = [];
+  S.jeux = []; S.pulses.clear();
+  S.etiq = []; etiqDOM.forEach(l => l.el.remove()); etiqDOM = [];
+  { const sv = $id('rappels'); if(sv) sv.innerHTML = ''; }
+  armerPose(false);
   desarmerLasso();
 
   S.root = root; scene.add(root);
@@ -911,6 +1005,7 @@ function installer(root, fichier){
   ['tLayers','tCut','tMeasure','tViews','tRenfort','tFantome','tSelect']
     .forEach(i => { const b = $id(i); if(b) b.disabled = false; });
   S.jeux = lireJeux(S.modeleId);
+  chargerEtiquettes(S.modeleId);
   tenterBVH();
   majOnglets();
   toast(`${nomStructure(fichier)} — ${fmt(t.x,1)} × ${fmt(t.z,1)} m, `
@@ -978,9 +1073,22 @@ function construireAretes(){
   S.aretesPretes = true;
 }
 
-/* Arête : gris neutre identique pour TOUTES les barres, renforts compris.
-   C'est le corps de la barre qui porte la couleur, pas son contour. */
-function couleurArete(A){ return A.sombre ? 0xB9BFC6 : 0x50565D; }
+/* ── Arêtes ────────────────────────────────────────────────────────────
+   Gris neutre pour l'existant : c'est le corps de la barre qui porte la
+   couleur, pas son contour.
+   EXCEPTION MESURÉE — renforts et sélection. Sous 3 px de largeur
+   projetée, le contour occupe la totalité de la barre (100 % à 2 px).
+   Un contour gris sur un renfort le grise donc entièrement dès qu'on
+   recule. Ces deux états prennent la teinte vive : le contour cesse
+   d'effacer le signal, il le PORTE — et il garde ses 2 px à toute
+   distance, ce qu'aucune couleur de remplissage ne sait faire. */
+function couleurArete(A, m){
+  if(m){
+    if(S.selection.has(m)) return A.selVif;
+    if(HALO_RENFORT && estRenfort(m)) return A.renfortVif;
+  }
+  return A.sombre ? 0xB9BFC6 : 0x50565D;
+}
 
 /* ══ LA fonction de repeinte ═══════════════════════════════════════════
    Une seule porte de sortie pour toutes les couleurs. Mutation directe. */
@@ -1003,6 +1111,32 @@ function couleurBarre(m, A){
   }
 }
 
+/* ══ IMPULSION DE REPÉRAGE ═════════════════════════════════════════════
+   Deux battements puis extinction. Sert à TROUVER une barre parmi mille,
+   pas à signaler un état permanent : un clignotement permanent serait
+   attrapé à une phase quelconque par une capture d'écran, et la moitié
+   des renforts manquerait sur la photo envoyée au chantier. */
+let pulseT0 = 0, pulseCibles = [];
+function pulser(meshes){
+  pulseCibles = (meshes || []).filter(Boolean);
+  if(!pulseCibles.length) return;
+  pulseT0 = performance.now();
+}
+function majPulses(){
+  if(!pulseCibles.length) return;
+  const t = (performance.now() - pulseT0) / PULSE_MS;
+  if(t >= 1){                       /* fin : on rend la main à l'état normal */
+    pulseCibles = []; S.pulses.clear(); appliquerCouleurs(); return;
+  }
+  /* Sinusoïde amortie : vif au début, s'éteint sans à-coup. */
+  const onde = Math.abs(Math.sin(Math.PI * PULSE_CYCLES * t)) * (1 - t);
+  const val = 0.35 + 1.45 * onde;
+  pulseCibles.forEach(m => {
+    S.pulses.set(m, val);
+    if(m.material) m.material.emissiveIntensity = val;
+  });
+}
+
 function appliquerCouleurs(){
   const A = AMBIANCES[S.ambiance];
   scene.background = new THREE.Color(A.fond);
@@ -1020,14 +1154,26 @@ function appliquerCouleurs(){
     const couleur = couleurBarre(m, A);
 
     mat.color.set(couleur);
-    /* La barre « meneuse » (dernière désignée) brille un peu plus fort :
-       sur une sélection de trente barres, on sait laquelle porte la fiche
-       détaillée quand on repasse à une seule. */
-    if(choisie) mat.emissive.set(m === S.sel
-                  ? (A.sombre ? 0x6B5800 : 0x4E4000)
-                  : (A.sombre ? 0x4A3C00 : 0x322800));
-    else if(r)  mat.emissive.set(A.sombre ? 0x401505 : 0x2A0E03);
-    else        mat.emissive.set(0x000000);
+
+    /* ── Émissif ────────────────────────────────────────────────────────
+       Une barre auto-éclairée ne dépend plus de l'orientation de la
+       lumière : vue par la tranche ou à contre-jour, elle garde sa
+       luminance. L'ancien émissif (0x2A0E03, quasi noir) laissait le
+       renfort s'éteindre selon l'angle. On pose ici la teinte VIVE et on
+       règle la force par emissiveIntensity, ce qui préserve la teinte. */
+    if(choisie){
+      mat.emissive.set(A.selVif);
+      mat.emissiveIntensity = SELECTION_ECLAT * (m === S.sel ? 1.0 : 0.72);
+    } else if(r){
+      mat.emissive.set(A.renfortVif);
+      mat.emissiveIntensity = S.fantome ? RENFORT_ECLAT_FANTOME : RENFORT_ECLAT;
+    } else {
+      mat.emissive.set(0x000000);
+      mat.emissiveIntensity = 1;
+    }
+    /* Impulsion de repérage : surcharge temporaire, remise à plat seule. */
+    const p = S.pulses.get(m);
+    if(p != null) mat.emissiveIntensity = p;
 
     /* Fantôme : translucide à 12 %, sans écrire la profondeur pour que
        les renforts opaques restent nets derrière plusieurs épaisseurs. */
@@ -1039,11 +1185,20 @@ function appliquerCouleurs(){
     mat.opacity = estompe ? 0.12 : 1.0;
     mat.depthWrite = !estompe;
 
+    /* ── Contour ────────────────────────────────────────────────────────
+       Sous 3 px de large, le contour EST la barre. Les renforts et la
+       sélection gardent donc le leur en toutes circonstances, même quand
+       l'utilisateur a coupé les arêtes : c'est leur seul moyen d'exister
+       à distance. L'existant, lui, suit le réglage. */
     const l = m.userData._lignes;
     if(l){
-      l.material.color.set(couleurArete(A));
-      l.material.opacity = estompe ? forceArete * 0.28 : forceArete;
-      l.visible = forceArete > 0;
+      const signal = choisie || (r && HALO_RENFORT);
+      l.material.color.set(couleurArete(A, m));
+      l.material.opacity = signal ? HALO_OPACITE
+                         : (estompe ? forceArete * 0.28 : forceArete);
+      l.visible = signal || forceArete > 0;
+      l.renderOrder = signal ? 3 : 1;
+      l.material.depthTest = !(signal && S.fantome);
     }
   });
   majLegende();
@@ -1381,6 +1536,229 @@ function construireAxes(){
   groupeAxes.visible = S.axesOn;
 }
 
+/* ══ ÉTIQUETTES DE REPÉRAGE ════════════════════════════════════════════
+   Deux ancrages, au choix de l'utilisateur (bascule dans le bandeau) :
+     · sur une barre  → « b »: numéro. L'étiquette suit le milieu de la
+       barre. Elle survit à un ré-export du .glb tant que la numérotation
+       Robot ne bouge pas — c'est l'ancrage à privilégier.
+     · sur un point   → « p »: [x,y,z] en repère glTF. Utile pour ce qui
+       ne correspond à aucune barre : un accès, une zone de levage.
+   Le côté « c » est un décalage en espace MONDE, pas en espace écran :
+   l'étiquette garde sa position relative à la structure quand on tourne
+   autour, comme une cote de plan. C'est ce qui manquait aux files de
+   construction, coincées à une seule extrémité. */
+const COTES = {
+  droite:   [ 1, 0, 0], gauche:  [-1, 0, 0],
+  devant:   [ 0, 0, 1], derriere:[ 0, 0,-1],
+  haut:     [ 0, 1, 0], bas:     [ 0,-1, 0]
+};
+const COTE_NOM = { droite:'Droite', gauche:'Gauche', devant:'Devant',
+                   derriere:'Derrière', haut:'Haut', bas:'Bas' };
+let etiqDOM = [];
+
+/* Point d'ancrage d'une étiquette, en coordonnées monde. */
+function ancrageEtiq(e){
+  if(e.b != null){
+    const m = S.meshes.find(x => x.userData.numero === e.b);
+    if(!m) return null;
+    return new THREE.Box3().setFromObject(m).getCenter(new THREE.Vector3());
+  }
+  if(Array.isArray(e.p) && e.p.length === 3)
+    return new THREE.Vector3(e.p[0], e.p[1], e.p[2]);
+  return null;
+}
+/* Position de la pastille = ancrage + décalage du côté demandé. */
+function posEtiq(e){
+  const a = ancrageEtiq(e);
+  if(!a) return null;
+  const d = COTES[e.c] || COTES.droite;
+  const k = S.size * ETIQ_DECALAGE * (e.s || 1);
+  return { ancre:a,
+           label:new THREE.Vector3(a.x + d[0]*k, a.y + d[1]*k, a.z + d[2]*k) };
+}
+
+function construireEtiquettes(){
+  etiqDOM.forEach(l => l.el.remove());
+  etiqDOM = [];
+  const svg = $id('rappels');
+  if(svg) svg.innerHTML = '';
+  if(!S.etiq.length) return;
+  const hote = $id('labels');
+  S.etiq.forEach((e, i) => {
+    const d = document.createElement('div');
+    d.className = 'etiq';
+    d.textContent = e.t || '(sans texte)';
+    if(e.s && e.s !== 1) d.style.fontSize = (12.5 * e.s).toFixed(1) + 'px';
+    hote.appendChild(d);
+    /* Trait de rappel : une ligne pointillée et un petit cercle sur le
+       point visé. Sans lui, deux étiquettes voisines deviennent
+       ambiguës — on ne sait plus laquelle désigne quoi. */
+    const ns = 'http://www.w3.org/2000/svg';
+    const ln = document.createElementNS(ns, 'line');
+    const ci = document.createElementNS(ns, 'circle');
+    ci.setAttribute('r', '3.2');
+    if(svg){ svg.appendChild(ln); svg.appendChild(ci); }
+    etiqDOM.push({ el:d, ln, ci, i });
+  });
+  majEtiqRepere();
+}
+
+const _va = new THREE.Vector3(), _vl = new THREE.Vector3();
+function majEtiqRepere(){
+  if(!etiqDOM.length) return;
+  const montrer = S.etiqOn;
+  etiqDOM.forEach(o => {
+    const e = S.etiq[o.i];
+    const P = e ? posEtiq(e) : null;
+    if(!montrer || !P){
+      o.el.style.display = 'none';
+      o.ln.style.display = o.ci.style.display = 'none';
+      return;
+    }
+    /* Une étiquette dont l'ancrage tombe du mauvais côté du plan de
+       coupe s'efface avec la matière qu'elle désigne. */
+    if(!coteVisible(P.ancre)){
+      o.el.style.display = 'none';
+      o.ln.style.display = o.ci.style.display = 'none';
+      return;
+    }
+    _va.copy(P.ancre).project(camera);
+    _vl.copy(P.label).project(camera);
+    const dedans = _vl.z < 1 && Math.abs(_vl.x) < 1.5 && Math.abs(_vl.y) < 1.5;
+    o.el.style.display = dedans ? 'block' : 'none';
+    o.ln.style.display = o.ci.style.display = dedans ? 'block' : 'none';
+    if(!dedans) return;
+    const lx = (_vl.x*0.5+0.5)*innerWidth,  ly = (-_vl.y*0.5+0.5)*innerHeight;
+    const ax = (_va.x*0.5+0.5)*innerWidth,  ay = (-_va.y*0.5+0.5)*innerHeight;
+    o.el.style.left = lx+'px'; o.el.style.top = ly+'px';
+    o.ln.setAttribute('x1', ax); o.ln.setAttribute('y1', ay);
+    o.ln.setAttribute('x2', lx); o.ln.setAttribute('y2', ly);
+    o.ci.setAttribute('cx', ax); o.ci.setAttribute('cy', ay);
+  });
+}
+
+/* ── Persistance ──────────────────────────────────────────────────────
+   Trois étages, identiques à ceux des renforts : le fichier publié fait
+   foi, le brouillon local ne concerne que cet appareil, et le bloc à
+   recopier est fourni tout fait — rien ne s'écrit à la main. */
+const cleEtiq = id => 'kf.etiquettes.' + (id || 'sans-modele');
+function lireBrouillonEtiq(id){
+  try { const j = JSON.parse(localStorage.getItem(cleEtiq(id)) || 'null');
+        return Array.isArray(j) ? j : null; }
+  catch(e){ return null; }
+}
+function ecrireBrouillonEtiq(){
+  try {
+    if(S.etiq.length) localStorage.setItem(cleEtiq(S.modeleId), JSON.stringify(S.etiq));
+    else localStorage.removeItem(cleEtiq(S.modeleId));
+  } catch(e){ /* navigation privée */ }
+}
+async function chargerEtiquettes(id){
+  S.etiq = []; S.etiqPublies = '[]';
+  try {
+    const r = await fetch(frais(ETIQUETTES_PUBLIEES), {cache:'no-store'});
+    if(r.ok){
+      const j = await r.json();
+      const bloc = j && id ? j[id] : null;
+      const liste = bloc && Array.isArray(bloc.e) ? bloc.e : [];
+      S.etiq = liste.map(normaliserEtiq).filter(Boolean);
+      S.etiqPublies = JSON.stringify(S.etiq);
+    }
+  } catch(e){ /* pas de fichier publié : on part de rien */ }
+  const brouillon = lireBrouillonEtiq(id);
+  if(brouillon){
+    S.etiq = brouillon.map(normaliserEtiq).filter(Boolean);
+    if(JSON.stringify(S.etiq) !== S.etiqPublies)
+      toast('Étiquettes : brouillon local en cours.', 2600);
+  }
+  construireEtiquettes();
+  if(ongletOuvert === 'etiquettes') dessinerTiroir('etiquettes');
+}
+/* Une ligne du fichier peut venir d'une saisie humaine : on la valide au
+   lieu de lui faire confiance. Une entrée douteuse est écartée, pas
+   corrigée en silence. */
+function normaliserEtiq(o){
+  if(!o || typeof o.t !== 'string' || !o.t.trim()) return null;
+  const e = { t:o.t.trim() };
+  if(Number.isInteger(o.b) && o.b > 0) e.b = o.b;
+  else if(Array.isArray(o.p) && o.p.length === 3 && o.p.every(Number.isFinite))
+    e.p = o.p.map(Number);
+  else return null;
+  e.c = COTES[o.c] ? o.c : 'droite';
+  const s = Number(o.s);
+  if(Number.isFinite(s) && s >= 0.6 && s <= 2.4) e.s = +s.toFixed(2);
+  return e;
+}
+/* Bloc prêt à coller dans modeles/etiquettes.json. */
+function blocEtiquettes(){
+  const cle = S.modeleId || 'modele';
+  const lignes = S.etiq.map(e => {
+    const p = [`"t": ${JSON.stringify(e.t)}`];
+    if(e.b != null) p.push(`"b": ${e.b}`);
+    else p.push(`"p": [${e.p.map(v => +v.toFixed(3)).join(', ')}]`);
+    p.push(`"c": "${e.c}"`);
+    if(e.s && e.s !== 1) p.push(`"s": ${e.s}`);
+    return '      { ' + p.join(', ') + ' }';
+  });
+  return `  ${JSON.stringify(cle)}: {\n    "v": 1,\n    "e": [\n`
+       + lignes.join(',\n') + `\n    ]\n  }`;
+}
+
+/* ── Pose ─────────────────────────────────────────────────────────────
+   Deux modes, basculés depuis le bandeau : accrocher à une barre, ou
+   poser un point libre. En mode point, le clic sur une surface pose le
+   point sur cette surface ; le clic dans le vide le pose au sol, au
+   niveau bas du modèle. */
+function armerPose(on){
+  S.pose.on = !!on;
+  document.body.classList.toggle('pose-active', S.pose.on);
+  $id('pose').classList.toggle('on', S.pose.on);
+  majBandeauPose();
+  if(S.pose.on){
+    S.measure.on = false; S.marquage = false; desarmerLasso();
+    majOnglets();
+  }
+}
+function majBandeauPose(){
+  const barre = S.pose.mode === 'barre';
+  $id('poseMode').textContent = 'Mode : ' + (barre ? 'barre' : 'point libre');
+  $id('poseTxt').textContent = barre
+    ? "Touchez une barre pour y accrocher l'étiquette"
+    : "Touchez un point de la vue pour y poser l'étiquette";
+}
+function poserEtiquette(x, y){
+  const hit = viser(x, y);
+  let neuve = null;
+  if(S.pose.mode === 'barre'){
+    if(!hit){ toast('Visez une barre.'); return; }
+    const n = hit.object.userData.numero;
+    if(n == null){ toast('Cet objet n\'a pas de numéro de barre.'); return; }
+    const t = prompt('Texte de l\'étiquette :', 'B' + n);
+    if(!t || !t.trim()) return;
+    neuve = { t:t.trim(), b:n, c:'droite' };
+  } else {
+    let p;
+    if(hit) p = hit.point.clone();
+    else {
+      /* Pas de surface visée : on projette sur le plan du sol, qui est
+         le niveau bas du modèle — un point flottant serait inutilisable. */
+      const plan = new THREE.Plane(new THREE.Vector3(0,1,0), -S.bbox.min.y);
+      p = new THREE.Vector3();
+      ndc.set((x/innerWidth)*2-1, -(y/innerHeight)*2+1);
+      ray.setFromCamera(ndc, camera);
+      if(!ray.ray.intersectPlane(plan, p)){ toast('Point hors du plan de sol.'); return; }
+    }
+    const t = prompt('Texte de l\'étiquette :', '');
+    if(!t || !t.trim()) return;
+    neuve = { t:t.trim(), p:[+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)],
+              c:'droite' };
+  }
+  S.etiq.push(neuve);
+  ecrireBrouillonEtiq(); construireEtiquettes();
+  if(ongletOuvert === 'etiquettes') dessinerTiroir('etiquettes');
+  toast('Étiquette posée. Le tiroir permet d\'en changer le côté.', 2600);
+}
+
 function majEtiquettesAxes(){
   if(!S.axesOn){
     etiqAxes.forEach(l => { l.el.style.display = 'none'; });
@@ -1691,7 +2069,7 @@ function lancerRecherche(txt){
   const nums = estRequeteNumerique(t) ? lireNumeros(t) : [];
   if(nums.length){
     const { pris, absents } = selectionnerNumeros(nums);
-    if(pris.length) cadrerSelection();
+    if(pris.length){ cadrerSelection(); pulser(pris.slice(0,40)); }
     toast(pris.length
       ? `${pris.length} barre(s) trouvée(s)`
         + (absents ? ` · ${absents} absente(s) ou masquée(s)` : '')
@@ -1707,7 +2085,7 @@ function lancerRecherche(txt){
              .join(' ').toLowerCase().includes(q);
   });
   poserSelection(pris, 'remplacer');
-  if(pris.length) cadrerSelection();
+  if(pris.length){ cadrerSelection(); pulser(pris.slice(0,40)); }
   toast(pris.length ? `${pris.length} barre(s) pour « ${t} »`
                     : `Rien de visible pour « ${t} ».`, 2400);
 }
@@ -1773,6 +2151,7 @@ renderer.domElement.addEventListener('pointerup', e => {
   const bref = Date.now()-appui.t < 600;
   appui = null;
   if(bouge > 8 || !bref || !S.root) return;
+  if(S.pose.on){ poserEtiquette(e.clientX, e.clientY); return; }
   const hit = viser(e.clientX, e.clientY);
   if(S.measure.on){
     hit ? ajouterPoint(accrocher(hit, e.clientX, e.clientY))
@@ -1936,7 +2315,8 @@ document.addEventListener('pointerdown', e => {
 let ongletOuvert = null;
 const TITRES = { layers:'Calques et couleurs', measure:'Mesures',
                  views:'Vues et image', renfort:'Renforts',
-                 modeles:'Chantiers', selection:'Sélection et métré' };
+                 modeles:'Chantiers', selection:'Sélection et métré',
+                 etiquettes:'Étiquettes de repérage' };
 function ouvrirTiroir(k){
   if(ongletOuvert === k){ fermerTiroir(); return; }
   ongletOuvert = k; $id('sheetTitle').textContent = TITRES[k];
@@ -2018,6 +2398,20 @@ function dessinerTiroir(key){
       b.appendChild(el('div','note',
         'Aucune file dans ce modèle : régénérez le .glb avec la version '
         + 'à jour de robot2glb.py.'));
+
+    b.appendChild(el('div','note','Étiquettes de repérage'));
+    const et = el('div','chips');
+    [['Affichées',true],['Masquées',false]].forEach(([lab,v]) => {
+      const c = el('button','chip'+(S.etiqOn===v?' on':''), lab);
+      c.onclick = () => { S.etiqOn = v; majEtiqRepere(); dessinerTiroir('layers'); };
+      et.appendChild(c);
+    });
+    b.appendChild(et);
+    const eg = el('button','ghost',
+      S.etiq.length ? `Gérer les ${S.etiq.length} étiquette(s)…`
+                    : 'Ajouter des étiquettes…');
+    eg.onclick = () => ouvrirTiroir('etiquettes');
+    b.appendChild(eg);
 
     b.appendChild(el('div','note','Définition des arêtes'));
     const ar = el('div','chips');
@@ -2114,7 +2508,8 @@ function dessinerTiroir(key){
         'B'+n + (m && m.userData.profil ? ' · '+m.userData.profil : ''));
       go.style.cursor = 'pointer';
       if(m) go.onclick = () => { selectionner(m);
-        cadrerTout(new THREE.Box3().setFromObject(m).expandByScalar(S.size*0.08)); };
+        cadrerTout(new THREE.Box3().setFromObject(m).expandByScalar(S.size*0.08));
+        pulser([m]); };
       if(S.deverrouille){
         const d = el('button','solo','Retirer');
         d.onclick = () => { noterRenforts(); S.renforts.delete(n);
@@ -2274,13 +2669,131 @@ function dessinerTiroir(key){
         const r = el('div','row');
         const go2 = el('span','lbl', `${j.nom} · ${j.nums.length} barres`);
         go2.style.cursor = 'pointer';
-        go2.onclick = () => { selectionnerNumeros(j.nums); cadrerSelection(); };
+        go2.onclick = () => { selectionnerNumeros(j.nums); cadrerSelection();
+                              pulser([...S.selection].slice(0,40)); };
         const del = el('button','solo','Retirer');
         del.onclick = () => { S.jeux.splice(i,1); ecrireJeux();
                               dessinerTiroir('selection'); };
         r.append(go2, del);
         b.appendChild(r);
       });
+    }
+  }
+
+  if(key === 'etiquettes'){
+    /* Affichage global : la même bascule que dans Calques, répétée ici
+       pour n'avoir pas à ressortir du tiroir où l'on travaille. */
+    b.appendChild(el('div','note','Affichage'));
+    const vis = el('div','chips');
+    [['Affichées',true],['Masquées',false]].forEach(([lab,v]) => {
+      const c = el('button','chip'+(S.etiqOn===v?' on':''), lab);
+      c.onclick = () => { S.etiqOn = v; majEtiqRepere();
+                          dessinerTiroir('etiquettes'); };
+      vis.appendChild(c);
+    });
+    b.appendChild(vis);
+
+    if(!S.deverrouille){
+      b.appendChild(el('div','note',
+        'Étiquettes définies au bureau. Touchez une ligne pour la localiser.'));
+    } else {
+      b.appendChild(el('div','note', S.pose.on
+        ? 'Pose active : le bandeau en haut permet de changer de mode.'
+        : 'Deux ancrages au choix : accroché à une barre, ou posé sur un '
+        + 'point libre. La bascule se fait dans le bandeau pendant la pose.'));
+      const p = el('button','ghost'+(S.pose.on?' on':''),
+                   S.pose.on ? 'Terminer la pose' : 'Poser une étiquette');
+      p.onclick = () => { armerPose(!S.pose.on); dessinerTiroir('etiquettes'); };
+      b.appendChild(p);
+    }
+
+    const h = el('div','row head');
+    h.append(el('span','lbl', S.etiq.length
+      ? `${S.etiq.length} étiquette(s)` : 'Aucune étiquette'));
+    b.appendChild(h);
+
+    S.etiq.forEach((e, i) => {
+      const r = el('div','row');
+      const nom = el('span','lbl',
+        e.t + (e.b != null ? ` · B${e.b}` : ' · point'));
+      nom.style.cursor = 'pointer';
+      nom.onclick = () => {
+        const P = posEtiq(e);
+        if(!P){ toast('Ancrage introuvable dans ce modèle.'); return; }
+        cadrerTout(new THREE.Box3().setFromCenterAndSize(P.ancre,
+          new THREE.Vector3(1,1,1).multiplyScalar(S.size*0.22)));
+        if(e.b != null){
+          const m = S.meshes.find(x => x.userData.numero === e.b);
+          if(m){ poserSelection([m],'remplacer'); pulser([m]); }
+        }
+      };
+      r.append(nom);
+      if(S.deverrouille){
+        /* Côté : on tourne dans les six positions. Un menu déroulant
+           coûterait un composant de plus pour six valeurs. */
+        const cot = el('button','solo', COTE_NOM[e.c] || 'Droite');
+        cot.onclick = () => {
+          const k = Object.keys(COTES);
+          e.c = k[(k.indexOf(e.c) + 1) % k.length];
+          ecrireBrouillonEtiq(); construireEtiquettes();
+          dessinerTiroir('etiquettes');
+        };
+        const del = el('button','solo','×');
+        del.title = 'Supprimer';
+        del.onclick = () => { S.etiq.splice(i,1); ecrireBrouillonEtiq();
+          construireEtiquettes(); dessinerTiroir('etiquettes'); };
+        r.append(cot, del);
+      } else {
+        const v = el('span','solo','Localiser'); v.style.opacity = '.7';
+        r.append(v);
+      }
+      b.appendChild(r);
+    });
+
+    if(S.deverrouille){
+      const modifie = JSON.stringify(S.etiq) !== S.etiqPublies;
+      if(modifie && S.etiq.length)
+        b.appendChild(el('div','note alerte',
+          'Brouillon local : ces étiquettes ne sont visibles que sur cet '
+          + 'appareil. Recopiez le bloc ci-dessous dans '
+          + 'modeles/etiquettes.json pour que les équipes les voient.'));
+
+      const h2 = el('div','row head');
+      h2.append(el('span','lbl','Bloc pour etiquettes.json'));
+      b.appendChild(h2);
+      const ta = el('textarea'); ta.id = 'copie'; ta.readOnly = true;
+      ta.value = S.etiq.length ? blocEtiquettes()
+               : '(aucune étiquette à publier)';
+      ta.style.height = '132px';
+      b.appendChild(ta);
+
+      const c = el('button','ghost','Copier le bloc');
+      c.onclick = () => copierTexte(blocEtiquettes(),
+        'Bloc copié — collez-le dans modeles/etiquettes.json sur GitHub.');
+      b.appendChild(c);
+
+      /* Fichier entier : au premier usage, etiquettes.json n'existe pas
+         encore. On fournit donc le fichier complet, pas seulement le
+         bloc, pour n'avoir rien à écrire à la main. */
+      const cf = el('button','ghost','Copier le fichier entier (1er dépôt)');
+      cf.onclick = () => copierTexte('{\n' + blocEtiquettes() + '\n}\n',
+        'Fichier copié — créez modeles/etiquettes.json avec ce contenu.');
+      b.appendChild(cf);
+
+      const a = el('button','ghost','Revenir aux étiquettes publiées');
+      a.onclick = () => {
+        try { localStorage.removeItem(cleEtiq(S.modeleId)); } catch(err){}
+        chargerEtiquettes(S.modeleId);
+        toast('Affichage aligné sur etiquettes.json.');
+      };
+      b.appendChild(a);
+
+      if(S.etiq.length){
+        const z = el('button','ghost','Tout effacer');
+        z.onclick = () => { S.etiq = []; ecrireBrouillonEtiq();
+          construireEtiquettes(); dessinerTiroir('etiquettes'); };
+        b.appendChild(z);
+      }
     }
   }
 
@@ -2442,6 +2955,11 @@ $id('mMetre').onclick    = () => { fermerMenu(); ouvrirTiroir('selection'); };
 $id('mAnnuler').onclick  = () => { fermerMenu(); annuler(); };
 $id('mRetablir').onclick = () => { fermerMenu(); retablir(); };
 $id('tSelect').onclick   = () => ouvrirTiroir('selection');
+$id('poseMode').onclick  = () => { S.pose.mode = S.pose.mode === 'barre'
+                                     ? 'point' : 'barre'; majBandeauPose(); };
+$id('poseFin').onclick   = () => { armerPose(false);
+                                   if(ongletOuvert === 'etiquettes')
+                                     dessinerTiroir('etiquettes'); };
 $id('tMeasure').onclick = () => {
   S.measure.on = !S.measure.on;
   if(S.measure.on){ S.marquage = false; selectionner(null); ouvrirTiroir('measure'); }
@@ -2505,6 +3023,8 @@ addEventListener('keydown', e => {
       S.axesOn = !S.axesOn; groupeAxes.visible = S.axesOn;
       if(ongletOuvert === 'layers') dessinerTiroir('layers'); break;
     case 'Escape':
+      if(S.pose.on){ armerPose(false);
+        if(ongletOuvert === 'etiquettes') dessinerTiroir('etiquettes'); break; }
       if(S.lasso.arme || S.lasso.actif){ desarmerLasso(); break; }
       fermerMenu(); fermerTiroir(); poserSelection([], 'remplacer');
       S.marquage = false; majOnglets(); break;
@@ -2512,7 +3032,8 @@ addEventListener('keydown', e => {
 });
 
 renderer.setAnimationLoop(() => {
-  controls.update(); majEtiquettes(); majEtiquettesAxes();
+  controls.update(); majPulses(); majEtiquettes(); majEtiquettesAxes();
+  majEtiqRepere();
   renderer.render(scene, camera);
 });
 </script>
