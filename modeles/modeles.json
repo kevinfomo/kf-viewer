@@ -25,6 +25,14 @@
       "fichier": "modeles/PRO2149-imprimerie-carre(bat1&2-por&tre).glb",
       "revision": "A",
       "date": "10/08/2026"
+    },
+    {
+      "id": "PRO2149-imprimerie-carre(BAT3A&B)",
+      "nom": "PRO2149-imprimerie-carre(BAT3A&B)",
+      "affaire": "PRO2149",
+      "fichier": "modeles/PRO2149-imprimerie-carre(BAT3A&B).glb",
+      "revision": "A",
+      "date": "11/08/2026"
     }
   ]
 }
