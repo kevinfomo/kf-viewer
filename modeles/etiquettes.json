@@ -6,5 +6,12 @@
       { "t": "BAT 3A", "p": [29.316, -0.7, -110.898], "c": "droite" },
       { "t": "Jonction 3A&3B", "b": 318, "c": "droite" }
     ]
+  },
+    "OPP0018645-(Renforts-METAL)-ECURIE-W-RACING_3D": {
+    "v": 1,
+    "e": [
+      { "t": "Entrée", "p": [8.862, 0, -18.398], "c": "droite" },
+      { "t": "Zone mitoyenne bâtiment R+1", "p": [8.729, 0, 3.289], "c": "droite" }
+    ]
   }
 }
