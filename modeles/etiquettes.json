@@ -1,0 +1,10 @@
+{
+  "PRO2149-imprimerie-carre(BAT3A&B)": {
+    "v": 1,
+    "e": [
+      { "t": "BAT 3B", "p": [28.06, -0.7, -35.559], "c": "droite" },
+      { "t": "BAT 3A", "p": [29.316, -0.7, -110.898], "c": "droite" },
+      { "t": "Jonction 3A&3B", "b": 318, "c": "droite" }
+    ]
+  }
+}
