@@ -30,18 +30,27 @@
   --tap:54px;
 
   /* ── Occupation du bas de l'écran ────────────────────────────────────
-     --marge-dock est la bande NOIRE laissée sous les boutons, au droit de
-     l'indicateur d'accueil de l'iPhone. Le fond de la barre, lui, descend
-     toujours jusqu'au bord physique : l'écran est plein.
-     Pourquoi ne pas la mettre à 0 : sous l'indicateur, iOS capture le
-     glissement vers le haut. Un bouton posé là se rate ou renvoie à
-     l'écran d'accueil — avec des gants, systématiquement.
-     Mettre 0px pour coller franchement au bord malgré tout.
-     --dock est la hauteur totale occupée : TOUT ce qui s'ancre en bas
-     s'y réfère, pour qu'un réglage suffise à tout réaligner. */
-  --marge-dock:14px;
+     DÉFAUT CORRIGÉ : la barre s'arrêtait au-dessus de l'indicateur
+     d'accueil et laissait voir le fond de page. Deux fautes cumulées —
+     un padding plafonné à 14 px alors que la zone système en fait 34,
+     et un fond de page CRÈME qui transparaissait dans l'écart.
+
+     Règle retenue : le FOND de la barre descend toujours jusqu'au bord
+     physique ; les ZONES TACTILES, elles, restent au-dessus de la zone
+     système. Sous l'indicateur, iOS capte le glissement vers le haut :
+     un bouton posé là se rate ou renvoie à l'écran d'accueil, avec des
+     gants systématiquement. D'où max() et non min() : on prend la plus
+     contraignante des deux marges, jamais la plus petite.
+     --marge-dock ne sert donc qu'aux appareils SANS zone système
+     (Android, desktop) ; sur iPhone c'est --safe-bas qui l'emporte.
+     --dock est la hauteur totale occupée : TOUT ancrage bas s'y réfère,
+     pour qu'un seul réglage réaligne l'ensemble. */
+  --marge-dock:10px;
   --safe-bas:env(safe-area-inset-bottom, 0px);
-  --dock:calc(var(--tap) + min(var(--safe-bas), var(--marge-dock)));
+  --safe-gauche:env(safe-area-inset-left, 0px);
+  --safe-droite:env(safe-area-inset-right, 0px);
+  --bas-utile:max(var(--safe-bas), var(--marge-dock));
+  --dock:calc(var(--tap) + var(--bas-utile));
 
   /* Surfaces d'interface — mode Chantier (opaque) par défaut */
   --panneau:#1A1A1A;
@@ -74,8 +83,15 @@ body.ui-verre .tick.on{
 body.ui-verre #toolbar button.on{ text-shadow:0 0 12px rgba(201,162,39,.5); }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
-body{font-family:var(--sans);color:var(--noir);background:var(--creme);touch-action:none}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;
+  background:#1A1A1A}
+/* Fond NOIR, pas crème : le canvas 3D couvre tout le viewport, ce fond
+   n'est donc visible que dans la zone système du bas (indicateur
+   d'accueil iPhone). En crème, il y dessinait une bande claire sous la
+   barre d'outils. En noir, il prolonge la barre — quelle que soit
+   l'ambiance, et même si iOS n'applique pas viewport-fit=cover (cas
+   d'une application installée avant la correction du manifeste). */
+body{font-family:var(--sans);color:var(--noir);background:#1A1A1A;touch-action:none}
 canvas{display:block;position:fixed;inset:0}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 /* Typographie du tiroir : tout en blanc, noir uniquement quand sélectionné.
@@ -209,7 +225,8 @@ body.verrouille #empty .hint{display:none}
 /* ── barre d'outils ── */
 #toolbar{position:fixed;z-index:30;left:0;right:0;bottom:0;display:flex;
   background:var(--panneau);border-top:1px solid var(--noir-rule);
-  padding-bottom:min(var(--safe-bas), var(--marge-dock))}
+  padding-bottom:var(--bas-utile);
+  padding-left:var(--safe-gauche);padding-right:var(--safe-droite)}
 body.ui-verre #toolbar{border-top-color:var(--panneau-bord)}
 #toolbar button{flex:1;min-height:var(--tap);display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:4px;color:var(--on-noir-dim);padding:8px 1px;
@@ -343,7 +360,14 @@ body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
 #hint.show{opacity:1}
 
 /* ── ordinateur : rail latéral ── */
-@media (min-width:820px){
+/* ── Poste de travail ──────────────────────────────────────────────────
+   DÉFAUT CORRIGÉ : la condition ne portait que sur la largeur. Un
+   iPhone 11 couché mesure 896 x 414 : il franchissait les 820 px et
+   recevait le rail VERTICAL, dont les neuf boutons ne tiennent pas dans
+   414 px de haut — les trois derniers étaient hors écran et aucun
+   défilement ne les rattrapait. La hauteur minimale sépare pour de bon
+   un vrai grand écran d'un téléphone couché. */
+@media (min-width:820px) and (min-height:560px){
   /* La barre devient un rail vertical à droite : plus rien n'est ancré en
      bas, --dock retombe donc à zéro et tous les calc() suivent seuls. */
   :root{--tap:58px;--dock:0px}
@@ -381,27 +405,58 @@ body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
   #legende .bascule{font-size:9.5px}
 }
 /* ── Téléphone en paysage ─────────────────────────────────────────────
-   414 px de haut : la barre garde ses sept boutons, mais les nouveaux
-   entrants les poussent hors du cadre et les rendaient inatteignables.
-   Elle défile désormais horizontalement, avec accrochage et un voile de
-   bord qui signale qu'il reste des outils à droite. La hauteur tactile
-   descend à 46 px : en paysage c'est le vertical qui manque, pas
-   l'horizontal. */
-@media (max-width:900px) and (orientation:landscape){
-  :root{--tap:46px}
-  #toolbar{overflow-x:auto;overflow-y:hidden;justify-content:flex-start;
+   Critère par la HAUTEUR, pas par la largeur : un téléphone couché fait
+   moins de 560 px de haut quel que soit son modèle, alors que sa largeur
+   (896 px sur iPhone 11, 932 sur un 14 Pro Max) dépasse tous les seuils
+   de largeur imaginables. Ce bloc et le rail de poste de travail sont
+   donc mutuellement exclusifs par construction.
+
+   La barre redevient HORIZONTALE en bas et défile : neuf boutons ne
+   tiennent pas dans 896 px à 74 px pièce. Toutes les propriétés du rail
+   sont explicitement remises à plat — hériter d'un bloc qu'on n'annule
+   pas est ce qui avait produit un rail vertical défilant en largeur,
+   c'est-à-dire rien du tout. */
+@media (orientation:landscape) and (max-height:559px){
+  :root{--tap:46px;--dock:calc(var(--tap) + var(--bas-utile))}
+  #toolbar{top:auto;bottom:0;left:0;right:0;width:auto;height:auto;
+    flex-direction:row;justify-content:flex-start;gap:0;
+    border-left:none;border-top:1px solid var(--noir-rule);
+    padding-bottom:var(--bas-utile);
+    padding-left:var(--safe-gauche);padding-right:var(--safe-droite);
+    overflow-x:auto;overflow-y:hidden;
     scrollbar-width:none;-ms-overflow-style:none;
     scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
-    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);
-    mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent)}
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent);
+    mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent)}
+  body.ui-verre #toolbar{border-top-color:var(--panneau-bord)}
   #toolbar::-webkit-scrollbar{display:none}
-  #toolbar button{flex:0 0 auto;min-width:74px;scroll-snap-align:start;padding:5px 4px}
+  /* Le voile de bord masque 30 px : sans cette réserve, le dernier
+     bouton resterait à moitié effacé même une fois défilé à fond. */
+  #toolbar::after{content:'';flex:0 0 30px}
+  /* flex:1 0 76px — les boutons OCCUPENT la largeur disponible quand il y
+     en a (iPhone 11 couché : 9 x 76 = 684 px pour 896, ils s'élargissent
+     et remplissent la barre) et ne rétrécissent JAMAIS sous 76 px quand
+     il n'y en a pas (iPhone SE couché : 667 px, le défilement prend le
+     relais). Une seule déclaration couvre les deux régimes. */
+  #toolbar button{flex:1 0 76px;height:auto;
+    scroll-snap-align:start;padding:5px 4px;
+    border-right:none;border-top:2px solid transparent}
+  #toolbar button.on{border-right-color:transparent;border-top-color:var(--moutarde)}
   #toolbar button svg{width:17px;height:17px}
   #toolbar button span{font-size:8px}
-  #sheet{max-height:74vh}
-  #plaque{max-width:36vw}
-  #legende{max-width:30vw;max-height:26vh}
+  /* Le tiroir reprend sa forme de feuille montante, pas de panneau latéral. */
+  #sheet{top:auto;bottom:0;left:0;right:0;width:auto;max-height:76dvh;
+    border-left:none;border-top:1px solid var(--noir-rule);
+    transform:translateY(101%);padding-bottom:var(--dock)}
+  #sheet.open{transform:translateY(0)}
+  #ruler{bottom:var(--dock);left:0;right:0;padding:9px 18px}
+  #fiche{bottom:calc(var(--dock) + 10px);left:calc(var(--safe-gauche) + 12px);
+    max-width:38vw;max-height:52dvh;overflow-y:auto}
+  #signature{bottom:calc(var(--dock) + 8px);left:calc(var(--safe-gauche) + 12px)}
   #signature .credit,#signature .revision{display:none}
+  #hint{bottom:calc(var(--dock) + 12px);left:50%}
+  #legende{right:calc(var(--safe-droite) + 12px);max-width:30vw;max-height:26dvh}
+  #plaque{max-width:36vw;left:calc(var(--safe-gauche) + 12px)}
 }
 
 /* ── Rectangle de sélection ───────────────────────────────────────────
@@ -708,15 +763,29 @@ const PULSE_CYCLES = 2;
 const BVH_AU_DELA_DE = 3000;
 
 /* Version du viewer : incrémentez ici, la mention suit. */
-const VERSION = '1.14';
+const VERSION = '1.15';
 $id('sCredit').textContent =
   `© v${VERSION} 2026 by Kévin FOMO — Ingénieur structures (CHEBAP)`;
 
 /* Interface : verre sur grand écran (Bureau), opaque sur mobile (Chantier).
    Basculable à la main dans Calques. */
-let uiVerre = matchMedia('(min-width:820px)').matches;
+/* Liquid glass « Bureau » sur poste de travail, opaque « Chantier »
+   partout ailleurs. Même condition que le rail vertical (§ media query) :
+   sans le critère de hauteur, un téléphone couché — 896 px de large —
+   basculait en verre, illisible en plein soleil sur site. */
+let uiVerre = matchMedia('(min-width:820px) and (min-height:560px)').matches;
 function appliquerUI(){ document.body.classList.toggle('ui-verre', uiVerre); }
 appliquerUI();
+
+/* L'ambiance était posée par appliquerCouleurs(), qui n'est appelée qu'au
+   chargement d'un modèle : l'écran d'accueil restait donc en clair alors
+   que le défaut est « nuit ». On la pose ici, au démarrage, sans attendre
+   qu'un .glb arrive. */
+function appliquerAmbianceBase(){
+  const A = AMBIANCES[S.ambiance];
+  document.body.classList.toggle('sombre', A.sombre);
+  scene.background = new THREE.Color(A.fond);
+}
 
 /* ══ Ambiances 3D ═══════════════════════════════════════════════════════ */
 /* renfortVif / selVif : MÊME TEINTE que la couleur métier, luminance
@@ -740,6 +809,8 @@ const AMBIANCES = {
 /* Palette de différenciation : saturée, écartée en teinte. */
 const PALETTE = [0x2E6F9E,0xC8551F,0x4C8B3F,0x8E4585,0x1F8A8C,0xB08A00,
                  0x5B5FA8,0xA33B4E,0x6E8B1F,0x3D7F7A,0x9C6B2F,0x486E9B];
+/* Marqueur : l'ambiance de démarrage est appliquée plus bas, une fois la
+   scène construite (appliquerAmbianceBase). */
 
 /* ══ scène ══ */
 const renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:true });
@@ -773,6 +844,10 @@ let etiqAxes = [];
 /* ══ état ══ */
 const S = {
   root:null, meshes:[], groups:[], bbox:null, size:1, tris:0, unit:1,
+  /* Défauts d'usage chantier : ambiance NUIT et mode FANTÔME actifs dès
+     l'ouverture. C'est la combinaison qui fait ressortir les renforts sur
+     une grande structure — celle qu'on rétablissait à la main à chaque
+     lancement. Les deux restent modifiables dans le tiroir Calques. */
   ambiance:'nuit', teinte:'etat', fantome:true, aretes:'marquees',
   axes:null, axesOn:true, cartouche:null, legendeOuverte:false,
   catalogue:[], modeleId:null, deverrouille:!VERROU,
@@ -797,6 +872,10 @@ const S = {
   etiq:[], etiqOn:true, etiqPublies:'[]',
   pose:{ on:false, mode:'barre' }
 };
+
+/* Ambiance de démarrage posée maintenant : la scène et S existent tous
+   deux à partir d'ici. */
+appliquerAmbianceBase();
 
 const fmt = (v,d=3) => v.toFixed(d);
 const hex = h => '#' + (h>>>0).toString(16).padStart(6,'0');
