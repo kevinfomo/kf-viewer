@@ -30,26 +30,27 @@
   --tap:54px;
 
   /* ── Occupation du bas de l'écran ────────────────────────────────────
-     DÉFAUT CORRIGÉ : la barre s'arrêtait au-dessus de l'indicateur
-     d'accueil et laissait voir le fond de page. Deux fautes cumulées —
-     un padding plafonné à 14 px alors que la zone système en fait 34,
-     et un fond de page CRÈME qui transparaissait dans l'écart.
+     --marge-dock : SEUL réglage de la hauteur des boutons. C'est la
+     distance entre le bas des boutons et le bord PHYSIQUE de l'écran.
 
-     Règle retenue : le FOND de la barre descend toujours jusqu'au bord
-     physique ; les ZONES TACTILES, elles, restent au-dessus de la zone
-     système. Sous l'indicateur, iOS capte le glissement vers le haut :
-     un bouton posé là se rate ou renvoie à l'écran d'accueil, avec des
-     gants systématiquement. D'où max() et non min() : on prend la plus
-     contraignante des deux marges, jamais la plus petite.
-     --marge-dock ne sert donc qu'aux appareils SANS zone système
-     (Android, desktop) ; sur iPhone c'est --safe-bas qui l'emporte.
-     --dock est la hauteur totale occupée : TOUT ancrage bas s'y réfère,
-     pour qu'un seul réglage réaligne l'ensemble. */
-  --marge-dock:10px;
-  --safe-bas:env(safe-area-inset-bottom, 0px);
+     Pourquoi une valeur fixe et non env(safe-area-inset-bottom) : la
+     valeur renvoyée par iOS varie selon le mode (onglet Safari, app
+     installée, viewport-fit appliqué ou non). Le calcul précédent en
+     dépendait, donc la barre ne se posait pas deux fois au même endroit
+     et se retrouvait bien trop haute en application installée. Une
+     constante se règle une fois et ne bouge plus.
+
+     14px place le bas des boutons juste au-dessus de l'indicateur
+     d'accueil (qui occupe les 8 à 13 px du bas). Monter à 20-24px si un
+     appui déclenche parfois le retour à l'écran d'accueil ; descendre à
+     6px pour coller franchement au bord.
+
+     Le FOND de la barre, lui, descend toujours au bord physique
+     (#toolbar est en bottom:0) : l'écran reste plein. */
+  --marge-dock:14px;
   --safe-gauche:env(safe-area-inset-left, 0px);
   --safe-droite:env(safe-area-inset-right, 0px);
-  --bas-utile:max(var(--safe-bas), var(--marge-dock));
+  --bas-utile:var(--marge-dock);
   --dock:calc(var(--tap) + var(--bas-utile));
 
   /* Surfaces d'interface — mode Chantier (opaque) par défaut */
@@ -237,6 +238,18 @@ body.ui-verre #toolbar{border-top-color:var(--panneau-bord)}
   text-transform:uppercase}
 #toolbar button.on{color:var(--moutarde);border-top-color:var(--moutarde)}
 #toolbar button:disabled{opacity:.3;cursor:default}
+/* ── Voile de défilement ───────────────────────────────────────────────
+   DÉFAUT CORRIGÉ : le voile de bord et la réserve de 30 px étaient
+   posés en dur dès qu'on passait en paysage. Or sur un iPhone 11 couché
+   les neuf boutons tiennent largement dans 896 px : le voile ne
+   signalait donc rien et la réserve creusait un vide à droite.
+   Ils ne sortent maintenant que si la barre déborde POUR DE VRAI, ce que
+   seul le navigateur peut dire — d'où la classe posée par
+   majDefilementBarre() plutôt qu'une media query. */
+#toolbar.defile{
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent);
+  mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent)}
+#toolbar.defile::after{content:'';flex:0 0 30px}
 
 /* ── tiroir ── */
 #sheet{position:fixed;z-index:25;left:0;right:0;bottom:0;background:var(--panneau);
@@ -425,14 +438,9 @@ body.sombre .alabel{color:var(--creme);background:rgba(20,20,20,.88);
     padding-left:var(--safe-gauche);padding-right:var(--safe-droite);
     overflow-x:auto;overflow-y:hidden;
     scrollbar-width:none;-ms-overflow-style:none;
-    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
-    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent);
-    mask-image:linear-gradient(90deg,#000 calc(100% - 30px),transparent)}
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
   body.ui-verre #toolbar{border-top-color:var(--panneau-bord)}
   #toolbar::-webkit-scrollbar{display:none}
-  /* Le voile de bord masque 30 px : sans cette réserve, le dernier
-     bouton resterait à moitié effacé même une fois défilé à fond. */
-  #toolbar::after{content:'';flex:0 0 30px}
   /* flex:1 0 76px — les boutons OCCUPENT la largeur disponible quand il y
      en a (iPhone 11 couché : 9 x 76 = 684 px pour 896, ils s'élargissent
      et remplissent la barre) et ne rétrécissent JAMAIS sous 76 px quand
@@ -763,7 +771,7 @@ const PULSE_CYCLES = 2;
 const BVH_AU_DELA_DE = 3000;
 
 /* Version du viewer : incrémentez ici, la mention suit. */
-const VERSION = '1.15';
+const VERSION = '1.16';
 $id('sCredit').textContent =
   `© v${VERSION} 2026 by Kévin FOMO — Ingénieur structures (CHEBAP)`;
 
@@ -776,6 +784,26 @@ $id('sCredit').textContent =
 let uiVerre = matchMedia('(min-width:820px) and (min-height:560px)').matches;
 function appliquerUI(){ document.body.classList.toggle('ui-verre', uiVerre); }
 appliquerUI();
+
+/* La barre déborde-t-elle vraiment ? Une media query ne peut pas le dire :
+   cela dépend du nombre de boutons actifs, de la largeur de l'écran et de
+   la taille de police du système. Seul le navigateur mesure. Le voile de
+   bord et la réserve de 30 px ne sont donc posés qu'ici, et seulement si
+   le contenu excède le cadre — sinon les boutons remplissent la barre et
+   rien ne creuse de vide à droite. */
+function majDefilementBarre(){
+  const t = document.getElementById('toolbar');
+  if(!t) return;
+  t.classList.remove('defile');
+  if(t.scrollWidth > t.clientWidth + 1) t.classList.add('defile');
+}
+addEventListener('resize', majDefilementBarre);
+addEventListener('orientationchange', () => setTimeout(majDefilementBarre, 320));
+/* Deux mesures : une au montage, une après la mise en page des polices —
+   une police système plus large élargit les libellés après coup. */
+addEventListener('DOMContentLoaded', majDefilementBarre);
+setTimeout(majDefilementBarre, 60);
+setTimeout(majDefilementBarre, 600);
 
 /* L'ambiance était posée par appliquerCouleurs(), qui n'est appelée qu'au
    chargement d'un modèle : l'écran d'accueil restait donc en clair alors
@@ -1085,6 +1113,7 @@ function installer(root, fichier){
     .forEach(i => { const b = $id(i); if(b) b.disabled = false; });
   S.jeux = lireJeux(S.modeleId);
   chargerEtiquettes(S.modeleId);
+  majDefilementBarre();          /* le bouton MAJ peut venir d'apparaître */
   tenterBVH();
   majOnglets();
   toast(`${nomStructure(fichier)} — ${fmt(t.x,1)} × ${fmt(t.z,1)} m, `
