@@ -41,6 +41,14 @@
       "fichier": "modeles/structure_A071_Huet_Julien.glb",
       "revision": "A",
       "date": "25/08/2026"
+    },
+    {
+      "id": "OPP0014544-EARL-BRACAVAL",
+      "nom": "EARL-BRACAVAL",
+      "affaire": "OPP0014544",
+      "fichier": "structure_M Bracaval Sébastien_3D(RENFORCEMENT).glb",
+      "revision": "A",
+      "date": "01/09/2026"
     }
-  ]
+    ]
 }
